@@ -1,27 +1,47 @@
-const Builder = @import("std").build.Builder;
+const std = @import("std");
 
-pub fn build(b: *Builder) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
+const pkgs = struct {
+    const network = std.build.Pkg{
+        .name = "network",
+        .path = "./deps/zig-network/network.zig",
+    };
+};
+
+pub fn build(b: *std.build.Builder) void {
     const target = b.standardTargetOptions(.{});
-
-    // Standard release options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("zig-showdown", "src/main.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
-    exe.install();
+    {
+        const client = b.addExecutable("showdown", "src/client/main.zig");
+        client.addPackage(pkgs.network);
+        client.setTarget(target);
+        client.setBuildMode(mode);
+        client.install();
 
-    const run_cmd = exe.run();
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+        const run_client_cmd = client.run();
+        run_client_cmd.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_client_cmd.addArgs(args);
+        }
+
+        const run_client_step = b.step("run", "Run the app");
+        run_client_step.dependOn(&run_client_cmd.step);
     }
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    {
+        const server = b.addExecutable("showdown-server", "src/server/main.zig");
+        server.addPackage(pkgs.network);
+        server.setTarget(target);
+        server.setBuildMode(mode);
+        server.install();
+
+        const run_server_cmd = server.run();
+        run_server_cmd.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_server_cmd.addArgs(args);
+        }
+
+        const run_server_step = b.step("run-server", "Run the app");
+        run_server_step.dependOn(&run_server_cmd.step);
+    }
 }

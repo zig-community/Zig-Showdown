@@ -10,6 +10,11 @@ const pkgs = struct {
         .name = "args",
         .path = "./deps/zig-args/args.zig",
     };
+
+    const pixel_draw = std.build.Pkg{
+        .name = "pixel_draw",
+        .path = "./deps/pixel_draw/src/pixel_draw.zig",
+    };
 };
 
 pub fn build(b: *std.build.Builder) void {
@@ -19,11 +24,21 @@ pub fn build(b: *std.build.Builder) void {
     const default_port = b.option(u16, "default-port", "The port the game will use as its default port") orelse 3315;
 
     {
+        const windows = b.option(bool, "windows", "create windows build") orelse false;
+
         const client = b.addExecutable("showdown", "src/client/main.zig");
         client.addPackage(pkgs.network);
         client.addPackage(pkgs.args);
+        client.addPackage(pkgs.pixel_draw);
         client.setTarget(target);
         client.setBuildMode(mode);
+
+        // NOTE(Samuel): This is temporary
+        if (@import("builtin").os.tag == .linux) {
+            client.linkSystemLibrary("c");
+            client.linkSystemLibrary("X11");
+        }
+
         client.addBuildOption(u16, "default_port", default_port);
         client.install();
 

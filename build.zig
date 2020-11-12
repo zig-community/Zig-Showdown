@@ -24,8 +24,6 @@ pub fn build(b: *std.build.Builder) void {
     const default_port = b.option(u16, "default-port", "The port the game will use as its default port") orelse 3315;
 
     {
-        const windows = b.option(bool, "windows", "create windows build") orelse false;
-
         const client = b.addExecutable("showdown", "src/client/main.zig");
         client.addPackage(pkgs.network);
         client.addPackage(pkgs.args);

@@ -4,3 +4,6 @@
 [submodule "deps/zig-args"]
 	path = deps/zig-args
 	url = https://github.com/MasterQ32/zig-args
+[submodule "deps/pixel_draw"]
+	path = deps/pixel_draw
+	url = https://gitlab.com/SamuelDeboni/pixel_draw.git

@@ -32,7 +32,7 @@ pub fn build(b: *std.build.Builder) void {
         client.setBuildMode(mode);
 
         // NOTE(Samuel): This is temporary
-        if (@import("builtin").os.tag == .linux) {
+        if (@import("builtin").os.tag != .windows) {
             client.linkSystemLibrary("c");
             client.linkSystemLibrary("X11");
         }

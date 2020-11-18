@@ -1,0 +1,293 @@
+const std = @import("std");
+
+/// Usage mask type that is used to mark usage of resources.
+/// Each bit represents a certain usage type
+pub const Mask = u64;
+
+//! This implements a resource management system that has a garbage collection
+//! model and can be used for easy loading/unloading of resources.
+//!
+//! First of all, this system uses a translation from strings to resource names (integer ids).
+//! This translation should happen only once and after that resource names should be used.
+//! Resources will always be addressed with these IDs.
+//!
+//! A resource then has the following lifetime:
+//! - Loaded from disk and created with the first call to `.get()` or `.preload()`
+//! - Held in memory via usage bits. Each bit has a used-defined meaning.
+//! - Each call to `.get` will set the provided usage bits
+//! - Usage bits are cleared with `.releaseResources()`
+//! - When `.collectGarbage()` is called and a resource has currently no usage bits set, the resource is freed.
+//!
+//! This design allows the system to share resources between modules that have no idea of the existence of other modules
+//! except for the definition of usage bits. Each module calls `.get()` and `.releaseResources()` to its liking and after that
+//! it calls `.collectGarbage()`.
+//! If resources are shared between modules, only the non-shared resources will be released.
+//! Example:
+//! - A module *HUD* loads a resource `font.tga` to display player health
+//! - A module *Level* loads a resource `font.tga` to display in-level counters.
+//! - The same *Level* module loads a resource `player.fbx` to provide a 3D model for the player
+//! - When the module *Level* is unloaded, it will release all resources with its own usage bits.
+//! This means that `player.fbx` will be unloaded from memory, but `font.tga` will remain.
+//!
+//! `.collectGarbage()` can also be called in a main loop without hurt. This will then enforce that
+//! released resources are actually destroyed.
+//!
+//! Note: It can be useful to `.releaseResources()` from a previous set, then `.get` all the freshly required
+//! resources and only then call `.collectGarbage()`. This allows sharing usage bits between two "memory sessions".
+//!
+//! TODO:
+//! - Figure out if resource handles can be translated at comptime
+//!   - This means no runtime resource loading
+//!   - Would allow really fast lookups of resources (no string translation required)
+//!   - Make this the mode that is used in release modes (@embedFile the resources, don't use fs, make getName not fail at all)
+
+/// A resource manager for a given type.
+/// Resources are obtained via a resource name (string identifier)
+/// and will be alive until no one referenced them anymore.
+/// Resources will be freed afterwards when necessary.
+/// T must have this interface:
+/// ```
+/// const T = struct {
+///   pub fn load(buffer: []const u8, extension_hint: []const u8) !T;
+///   pub fn deinit(self: *T);
+/// };
+/// ```
+pub fn ResourceManager(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        /// The resource type that is managed
+        pub const Resource = T;
+
+        /// A unique handle that represents a resource in the system.
+        /// Resource names are only unique in regard to a ResourceManager though.
+        const ResourceName = enum(u32) { _ }; // u32 should be enough resources for everyone
+
+        /// A resource that is managed by this structure.
+        const ManagedResource = struct {
+            usage: Mask,
+            resource: Resource,
+        };
+        const ManagedResourceMap = std.ArrayHashMapUnmanaged(
+            ResourceName,
+            ManagedResource,
+            hashName,
+            eqlName,
+            false,
+        );
+
+        fn hashName(m: ResourceName) u32 {
+            return @enumToInt(m);
+        }
+
+        fn eqlName(a: ResourceName, b: ResourceName) bool {
+            return a == b;
+        }
+
+        allocator: *std.mem.Allocator,
+
+        /// Arena allocator that stores strings used in the resource manager
+        string_arena: std.heap.ArenaAllocator,
+
+        /// A map from the user-defined resource name to internal *fast* resource names (indices)
+        resource_names: std.StringHashMapUnmanaged(ResourceName),
+
+        /// The next resource name to be allocated. This needs to increment for every item added to
+        /// resource_names.
+        next_resource_name: u32 = 0,
+
+        resources: ManagedResourceMap,
+
+        pub fn init(allocator: *std.mem.Allocator) Self {
+            return Self{
+                .allocator = allocator,
+                .string_arena = std.heap.ArenaAllocator.init(allocator),
+                .resource_names = std.StringHashMapUnmanaged(ResourceName){},
+                .resources = ManagedResourceMap{},
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            for (self.resources.items()) |*item| {
+                item.value.resource.deinit();
+            }
+
+            self.resource_names.deinit(self.allocator);
+            self.resources.deinit(self.allocator);
+            self.string_arena.deinit();
+            self.* = undefined;
+        }
+
+        /// Returns a resource name (handle) to the given path.
+        /// For the same path, the same name will be returned.
+        pub fn getName(self: *Self, resource_path: []const u8) !ResourceName {
+            std.debug.assert(std.fs.path.isAbsolutePosix(resource_path));
+
+            const gopr = try self.resource_names.getOrPut(self.allocator, resource_path);
+            if (!gopr.found_existing) {
+                // next statement is going to replace the user-passed path
+                // which was stored by the hash map with an actual self-owned
+                // string pointer.
+                errdefer _ = self.resource_names.remove(resource_path);
+                gopr.entry.key = try self.string_arena.allocator.dupe(u8, resource_path);
+
+                gopr.entry.value = @intToEnum(ResourceName, self.next_resource_name);
+                self.next_resource_name += 1;
+            }
+
+            return gopr.entry.value;
+        }
+
+        /// Collects garbage and frees all resources that are currently not referenced.
+        /// This means that they have no `usage` bits set.
+        pub fn collectGarbage(self: *Self) void {
+            const items = self.resources.items();
+            var len = items.len;
+            var i: usize = 0;
+            while (i < len) {
+                if (items[i].value.usage == 0) {
+                    // delete all unused resources
+                    var old_entry = self.resources.remove(items[i].key) orelse unreachable;
+                    old_entry.value.resource.deinit();
+                    len -= 1; // swapRemove keeps the next item at `i`, but reduces length
+                } else {
+                    // keep iterating
+                    i += 1;
+                }
+            }
+        }
+
+        /// Will reset all bits in `usage` for all resources.
+        /// This allows freeing all resources that only have the `usage` bits set to be cleaned up
+        /// in the next garbage collection cycle.
+        pub fn releaseResources(self: *Self, usage: Mask) void {
+            for (self.resources.items()) |*item| {
+                item.value.usage &= ~usage;
+            }
+        }
+
+        /// Obtains access to a resource. The resource will be loaded ad-hoc if not present
+        /// already.
+        /// The resource will also be marked with all bits in `usage` so it will prevent the
+        /// next garbage collection cycle.
+        pub fn get(self: *Self, name: ResourceName, usage: Mask) !T {
+            const gopr = try self.resources.getOrPut(self.allocator, name);
+            if (!gopr.found_existing) {
+                errdefer _ = self.resources.remove(name);
+
+                var iter = self.resource_names.iterator();
+                const file_name = while (iter.next()) |kv| {
+                    if (kv.value == name)
+                        break kv.key;
+                } else @panic("get received an invalid name from the programmer. This is a bug!");
+
+                std.debug.assert(file_name.len > 0 and file_name[0] == '/');
+
+                const buffer = try std.fs.cwd().readFileAlloc(
+                    self.allocator,
+                    file_name[1..],
+                    100 * 1024 * 1024, // 100MB per resource should be enough *for now*
+                );
+                defer self.allocator.free(buffer);
+
+                gopr.entry.value = ManagedResource{
+                    .usage = 0,
+                    .resource = try Resource.load(
+                        buffer,
+                        filePathExtension(file_name),
+                    ),
+                };
+            }
+            gopr.entry.value.usage |= usage; // set the new usage bits
+            return gopr.entry.value.resource;
+        }
+
+        /// Tries to preload all resources that are available and have the
+        /// same path prefix as `prefix`.
+        /// This allows a quick loading without knowing all resources names.
+        /// `prefix` must be a valid resource identifier!
+        pub fn preload(self: *Self, prefix: []const u8, usage: Mask) !void {
+            std.debug.assert(std.fs.path.isAbsolutePosix(prefix));
+            @panic("TODO: Not implemented yet");
+        }
+    };
+}
+
+fn filePathExtension(path: []const u8) []const u8 {
+    const filename = std.fs.path.basename(path);
+    return if (std.mem.lastIndexOf(u8, filename, ".")) |index|
+        if (index == 0 or index == filename.len - 1)
+            ""
+        else
+            filename[index..]
+    else
+        "";
+}
+
+test "ResourceManager" {
+    const R = struct {
+        const Self = @This();
+
+        var leak_counter: usize = 0;
+
+        pub fn load(data: []const u8, ext: []const u8) !Self {
+            leak_counter += 1;
+            return Self{};
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.* = undefined;
+            leak_counter -= 1;
+        }
+    };
+
+    {
+        var manager = ResourceManager(R).init(std.testing.allocator);
+        defer manager.deinit();
+
+        var n0_1 = try manager.getName("/foo/bar/bam");
+        var n0_2 = try manager.getName("/foo/bar/bam");
+        var n0_3 = try manager.getName("/foo/bar/bam");
+
+        var n1 = try manager.getName("/foozln");
+
+        // Check for same and unique names
+        std.testing.expectEqual(n0_1, n0_2);
+        std.testing.expectEqual(n0_2, n0_3);
+        std.testing.expect(n0_1 != n1);
+
+        var font_id = try manager.getName("/assets/font.tga");
+        var potato_id = try manager.getName("/assets/potato.tga");
+        var floor_id = try manager.getName("/assets/bad_floor.tga");
+
+        const font_1 = try manager.get(font_id, 0x01);
+        const font_2 = try manager.get(font_id, 0x01);
+        const font_3 = try manager.get(font_id, 0x01);
+
+        // we have one distinct resource loaded right now
+        std.testing.expectEqual(@as(usize, 1), R.leak_counter);
+
+        const potato = try manager.get(potato_id, 0x02);
+        std.testing.expectEqual(@as(usize, 2), R.leak_counter);
+
+        const floor = try manager.get(floor_id, 0x03);
+        std.testing.expectEqual(@as(usize, 3), R.leak_counter);
+
+        manager.collectGarbage();
+        std.testing.expectEqual(@as(usize, 3), R.leak_counter);
+
+        manager.releaseResources(0x02); // this marks potato for deletion
+        std.testing.expectEqual(@as(usize, 3), R.leak_counter);
+
+        manager.collectGarbage(); // this will release potato, but neither font nor floor
+        std.testing.expectEqual(@as(usize, 2), R.leak_counter);
+
+        manager.releaseResources(0x01); // this marks both font and floor for deletion
+        std.testing.expectEqual(@as(usize, 2), R.leak_counter);
+
+        manager.collectGarbage(); // this will release floor and font
+        std.testing.expectEqual(@as(usize, 0), R.leak_counter);
+    }
+    // Check if interacting with the resource manager leaked any resources
+    std.testing.expectEqual(@as(usize, 0), R.leak_counter);
+}

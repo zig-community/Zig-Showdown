@@ -1,7 +1,8 @@
 const std = @import("std");
 const zwl = @import("zwl");
-
 const transitions = @import("transitions.zig");
+
+const Resources = @import("game_resources.zig");
 
 //! This file implements the core game structure and state transitions.
 
@@ -50,6 +51,7 @@ pub const Game = struct {
     };
 
     allocator: *std.mem.Allocator,
+    resources: *Resources,
 
     create_server: states.CreateServer,
     create_sp_game: states.CreateSpGame,
@@ -72,14 +74,15 @@ pub const Game = struct {
     /// total time spent in drawing
     render_time: f32 = 0.0,
 
-    pub fn init(allocator: *std.mem.Allocator) !Self {
+    pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         var game = Self{
             .allocator = allocator,
+            .resources = resources,
 
             .create_server = .{},
             .create_sp_game = .{},
             .credits = .{},
-            .gameplay = .{},
+            .gameplay = undefined,
             .join_game = .{},
             .main_menu = .{},
             .options = .{},
@@ -90,33 +93,47 @@ pub const Game = struct {
             .transition_buffer_to = undefined,
         };
 
+        game.gameplay = try states.Gameplay.init(allocator, resources);
+        errdefer game.gameplay.deinit();
+
         game.transition_buffer_from = try allocator.alloc(u32, 1280 * 720);
         errdefer allocator.free(game.transition_buffer_from);
 
         game.transition_buffer_to = try allocator.alloc(u32, 1280 * 720);
         errdefer allocator.free(game.transition_buffer_to);
 
-        game.current_state = .{
-            .transition = .{
-                .from = .splash,
-                .to = .main_menu,
-                .progress = 0.0,
-                .style = .slice_bl_to_tr,
-                .duration = 0.25,
-            },
-        };
-
         return game;
     }
 
     pub fn deinit(self: *Self) void {
+        self.gameplay.deinit();
         self.allocator.free(self.transition_buffer_from);
         self.allocator.free(self.transition_buffer_to);
         self.* = undefined;
     }
 
+    fn updateState(self: *Self, state: State, delta_time: f32) !void {
+        switch (state) {
+            // .create_server => try self.create_server.update(target, self.update_time, delta_time),
+            // .create_sp_game => try self.create_sp_game.update(target, self.update_time, delta_time),
+            // .credits => try self.credits.update(target, self.update_time, delta_time),
+            .gameplay => try self.gameplay.update(self.update_time, delta_time),
+            // .join_game => try self.join_game.update(target, self.update_time, delta_time),
+            // .main_menu => try self.main_menu.update(target, self.update_time, delta_time),
+            // .options => try self.options.update(target, self.update_time, delta_time),
+            // .pause_menu => try self.pause_menu.update(target, self.update_time, delta_time),
+            // .splash => try self.splash.update(target, self.update_time, delta_time),
+            else => {},
+        }
+    }
+
     pub fn update(self: *Self, delta_time: f32) !void {
         defer self.update_time += delta_time;
+
+        switch (self.current_state) {
+            .state => |state| try self.updateState(state, delta_time),
+            .transition => {}, // do not update game logic in transitions
+        }
     }
 
     fn renderState(self: *Self, state: State, target: zwl.PixelBuffer, delta_time: f32) !void {

@@ -47,7 +47,7 @@ pub const Mask = u64;
 /// Resources are obtained via a resource name (string identifier)
 /// and will be alive until no one referenced them anymore.
 /// Resources will be freed afterwards when necessary.
-pub fn ResourceManager(
+pub fn ResourcePool(
     comptime T: type,
     loadFn: fn (allocator: *std.mem.Allocator, buffer: []const u8, extension_hint: []const u8) Error!T,
     freeFn: fn (allocator: *std.mem.Allocator, self: *T) void,

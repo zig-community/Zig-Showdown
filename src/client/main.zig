@@ -1,10 +1,11 @@
 const std = @import("std");
 const network = @import("network");
 const args = @import("args");
-const draw = @import("pixel_draw");
 const zwl = @import("zwl");
 
 const Game = @import("game.zig").Game;
+
+const Resources = @import("game_resources.zig");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
@@ -19,14 +20,6 @@ pub const WindowPlatform = zwl.Platform(.{
     .render_software = true,
     .x11_use_xcb = false,
 });
-
-const resources = struct {
-    usingnamespace @import("resources.zig");
-
-    const usage_generic_render = 0x01;
-
-    var textures: ResourceManager(draw.Texture, loadTexture, freeTexture) = undefined;
-};
 
 pub fn main() anyerror!u8 {
     defer _ = gpa.deinit();
@@ -64,11 +57,22 @@ pub fn main() anyerror!u8 {
     });
     defer window.deinit();
 
-    resources.textures = @TypeOf(resources.textures).init(global_allocator);
-    defer resources.textures.deinit();
+    var resources = Resources.init(global_allocator);
+    defer resources.deinit();
 
-    var game = try Game.init(global_allocator);
+    var game = try Game.init(global_allocator, &resources);
     defer game.deinit();
+
+    game.current_state = .{
+        .transition = .{
+            .from = .splash,
+            .to = .gameplay,
+            .progress = 0.0,
+            .style = .slice_bl_to_tr,
+            .duration = 0.25,
+        },
+    };
+    // game.current_state = .{ .state = .gameplay };
 
     //main_loop: while (true) {
     // const event = try platform.waitForEvent();
@@ -96,6 +100,8 @@ pub fn main() anyerror!u8 {
     std.time.sleep(500 * std.time.ns_per_ms);
 
     while (true) {
+        try game.update(0.01);
+
         const pixbuf = try window.mapPixels();
         try game.render(pixbuf, 0.01); // 10ms, not true, but ¯\_(ツ)_/¯
         try window.submitPixels();
@@ -123,129 +129,6 @@ const CliArgs = struct {
 
 fn printUsage(writer: anytype) !void {
     try writer.writeAll(
-        \\
+        \\Someone should write this
     );
 }
-
-// Potato demo code
-var quad_mesh: draw.Mesh = undefined;
-var font: draw.BitmapFont = undefined;
-
-fn loadTexture(allocator: *std.mem.Allocator, buffer: []const u8, hint: []const u8) resources.Error!draw.Texture {
-    return draw.textureFromTgaData(allocator, buffer) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => return error.InvalidData,
-    };
-}
-fn freeTexture(allocator: *std.mem.Allocator, self: *draw.Texture) void {
-    allocator.free(self.raw);
-    self.* = undefined;
-}
-
-fn start() void {
-    font = .{
-        .texture = draw.textureFromTgaData(global_allocator, @embedFile("../../assets/font.tga")) catch unreachable,
-        .font_size_x = 12,
-        .font_size_y = 16,
-        .character_spacing = 11,
-    };
-
-    const bad_floor = resources.textures.get(
-        resources.textures.getName("/assets/bad_floor.tga") catch unreachable,
-        resources.usage_generic_render,
-    ) catch unreachable;
-
-    cube_mesh.texture = resources.textures.get(
-        resources.textures.getName("/assets/potato.tga") catch unreachable,
-        resources.usage_generic_render,
-    ) catch unreachable;
-
-    quad_mesh = draw.createQuadMesh(global_allocator, 21, 21, 10.5, 10.5, bad_floor, .Tile);
-
-    for (quad_mesh.v) |*v| {
-        v.pos = rotateVectorOnX(v.pos, 3.1415926535 * 0.5);
-        v.pos.y -= 0.5;
-    }
-}
-
-fn end() void {
-    global_allocator.free(font.texture.raw);
-
-    global_allocator.free(quad_mesh.v);
-    global_allocator.free(quad_mesh.i);
-}
-
-var print_buff: [512]u8 = undefined;
-
-var cube_v = [_]Vertex{
-    Vertex.c(Vec3.c(-0.5, 0.5, 0.5), Color.c(0, 0, 0, 1), Vec2.c(0, 1)),
-    Vertex.c(Vec3.c(0.5, 0.5, 0.5), Color.c(0, 0, 1, 1), Vec2.c(1, 1)),
-    Vertex.c(Vec3.c(-0.5, -0.5, 0.5), Color.c(0, 1, 0, 1), Vec2.c(0, 0)),
-    Vertex.c(Vec3.c(0.5, -0.5, 0.5), Color.c(0, 1, 1, 1), Vec2.c(1, 0)),
-
-    Vertex.c(Vec3.c(-0.5, 0.5, -0.5), Color.c(1, 0, 0, 1), Vec2.c(1, 1)),
-    Vertex.c(Vec3.c(0.5, 0.5, -0.5), Color.c(1, 0, 1, 1), Vec2.c(0, 1)),
-    Vertex.c(Vec3.c(-0.5, -0.5, -0.5), Color.c(1, 1, 0, 1), Vec2.c(1, 0)),
-    Vertex.c(Vec3.c(0.5, -0.5, -0.5), Color.c(1, 1, 1, 1), Vec2.c(0, 0)),
-};
-
-var cube_i = [_]u32{
-    0, 2, 3,
-    0, 3, 1,
-    1, 3, 7,
-    1, 7, 5,
-    4, 0, 1,
-    4, 1, 5,
-    4, 6, 2,
-    4, 2, 0,
-    6, 3, 2,
-    6, 7, 3,
-    5, 7, 6,
-    5, 6, 4,
-};
-
-var cube_mesh = draw.Mesh{
-    .v = &cube_v,
-    .i = &cube_i,
-    .texture = undefined,
-};
-
-usingnamespace draw.vector_math;
-
-fn update(delta: f32) void {
-    draw.fillScreenWithRGBColor(50, 100, 150);
-
-    // NOTE(Samuel): Mesh Transformation
-
-    if (draw.keyPressed(.up)) cam.rotation.x += delta * 2;
-    if (draw.keyPressed(.down)) cam.rotation.x -= delta * 2;
-    if (draw.keyPressed(.right)) cam.rotation.y += delta * 2;
-    if (draw.keyPressed(.left)) cam.rotation.y -= delta * 2;
-
-    var camera_forward = eulerAnglesToDirVector(cam.rotation);
-    camera_forward.y = 0;
-    var camera_right = eulerAnglesToDirVector(Vec3.c(cam.rotation.x, cam.rotation.y - 3.1415926535 * 0.5, cam.rotation.z));
-    camera_right.y = 0;
-
-    const input_z = draw.keyStrengh(.s) - draw.keyStrengh(.w);
-    const input_x = draw.keyStrengh(.d) - draw.keyStrengh(.a);
-
-    camera_forward = Vec3_mul_F(camera_forward, input_z);
-    camera_right = Vec3_mul_F(camera_right, input_x);
-
-    var camera_delta_p = Vec3_add(camera_forward, camera_right);
-    camera_delta_p = Vec3_normalize(camera_delta_p);
-    camera_delta_p = Vec3_mul_F(camera_delta_p, delta * 3);
-
-    cam.pos = Vec3_add(camera_delta_p, cam.pos);
-
-    draw.drawMesh(quad_mesh, .Texture, cam);
-    draw.drawMesh(cube_mesh, .Texture, cam);
-
-    { // Show fps
-        const fpst = std.fmt.bufPrint(&print_buff, "{d:0.4}/{d:0.4}", .{ 1 / delta, delta }) catch unreachable;
-        draw.drawBitmapFont(fpst, 20, 20, 1, 1, font);
-    }
-}
-
-var cam: draw.Camera3D = .{ .pos = .{ .z = 2.0 } };

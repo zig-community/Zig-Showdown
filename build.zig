@@ -15,6 +15,11 @@ const pkgs = struct {
         .name = "pixel_draw",
         .path = "./deps/pixel_draw/src/pixel_draw.zig",
     };
+
+    const zwl = std.build.Pkg{
+        .name = "zwl",
+        .path = "./deps/zwl/src/zwl.zig",
+    };
 };
 
 pub fn build(b: *std.build.Builder) void {
@@ -28,14 +33,15 @@ pub fn build(b: *std.build.Builder) void {
         client.addPackage(pkgs.network);
         client.addPackage(pkgs.args);
         client.addPackage(pkgs.pixel_draw);
+        client.addPackage(pkgs.zwl);
         client.setTarget(target);
         client.setBuildMode(mode);
 
-        // NOTE(Samuel): This is temporary
-        if (@import("builtin").os.tag != .windows) {
-            client.linkSystemLibrary("c");
-            client.linkSystemLibrary("X11");
-        }
+        // // NOTE(Samuel): This is temporary
+        // if (@import("builtin").os.tag != .windows) {
+        //     client.linkSystemLibrary("c");
+        //     client.linkSystemLibrary("X11");
+        // }
 
         client.addBuildOption(u16, "default_port", default_port);
         client.install();

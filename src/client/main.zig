@@ -2,9 +2,23 @@ const std = @import("std");
 const network = @import("network");
 const args = @import("args");
 const draw = @import("pixel_draw");
+const zwl = @import("zwl");
+
+const Game = @import("game.zig").Game;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
+
+pub const WindowPlatform = zwl.Platform(.{
+    .platforms_enabled = .{
+        .x11 = (std.builtin.os.tag == .linux),
+        .wayland = false,
+        .windows = (std.builtin.os.tag == .windows),
+    },
+    .single_window = false,
+    .render_software = true,
+    .x11_use_xcb = false,
+});
 
 const resources = struct {
     usingnamespace @import("resources.zig");
@@ -34,11 +48,52 @@ pub fn main() anyerror!u8 {
         return 0;
     }
 
+    // Do not init windowing before necessary. We don't need a window
+    // for printing a help string.
+
+    var platform = try WindowPlatform.init(global_allocator, .{});
+    defer platform.deinit();
+
+    var window = try platform.createWindow(.{
+        .title = "Zig SHOWDOWN",
+        .width = 1280,
+        .height = 720,
+        .resizeable = false,
+        .track_damage = true,
+        .visible = true,
+    });
+    defer window.deinit();
+
     resources.textures = @TypeOf(resources.textures).init(global_allocator);
     defer resources.textures.deinit();
 
-    try draw.init(global_allocator, 800, 600, start, update);
-    end();
+    var game = try Game.init(global_allocator);
+    defer game.deinit();
+
+    main_loop: while (true) {
+        const event = try platform.waitForEvent();
+
+        switch (event) {
+            .WindowResized => |win| {
+                const size = win.getSize();
+                std.log.debug("*notices size {}x{}* OwO what's this", .{ size[0], size[1] });
+            },
+
+            // someone closed the window, just stop the game:
+            .WindowDestroyed, .ApplicationTerminated => break :main_loop,
+
+            .WindowDamaged => |damage| {
+                std.log.debug("Taking damage: {}x{} @ {}x{}", .{ damage.w, damage.h, damage.x, damage.y });
+
+                const pixbuf = try window.mapPixels();
+                game.render(pixbuf);
+                try window.submitPixels();
+            },
+        }
+    }
+
+    // try draw.init(global_allocator, 800, 600, start, update);
+    // end();
 
     return 0;
 }

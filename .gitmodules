@@ -7,3 +7,6 @@
 [submodule "deps/pixel_draw"]
 	path = deps/pixel_draw
 	url = https://gitlab.com/SamuelDeboni/pixel_draw.git
+[submodule "deps/zwl"]
+	path = deps/zwl
+	url = https://github.com/Aransentin/ZWL

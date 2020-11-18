@@ -70,30 +70,36 @@ pub fn main() anyerror!u8 {
     var game = try Game.init(global_allocator);
     defer game.deinit();
 
-    main_loop: while (true) {
-        const event = try platform.waitForEvent();
+    //main_loop: while (true) {
+    // const event = try platform.waitForEvent();
 
-        switch (event) {
-            .WindowResized => |win| {
-                const size = win.getSize();
-                std.log.debug("*notices size {}x{}* OwO what's this", .{ size[0], size[1] });
-            },
+    // switch (event) {
+    //     .WindowResized => |win| {
+    //         const size = win.getSize();
+    //         std.log.debug("*notices size {}x{}* OwO what's this", .{ size[0], size[1] });
+    //     },
 
-            // someone closed the window, just stop the game:
-            .WindowDestroyed, .ApplicationTerminated => break :main_loop,
+    //     // someone closed the window, just stop the game:
+    //     .WindowDestroyed, .ApplicationTerminated => break :main_loop,
 
-            .WindowDamaged => |damage| {
-                std.log.debug("Taking damage: {}x{} @ {}x{}", .{ damage.w, damage.h, damage.x, damage.y });
+    //     .WindowDamaged => |damage| {
+    //         std.log.debug("Taking damage: {}x{} @ {}x{}", .{ damage.w, damage.h, damage.x, damage.y });
+    //     },
+    // }
 
-                const pixbuf = try window.mapPixels();
-                game.render(pixbuf);
-                try window.submitPixels();
-            },
-        }
+    {
+        const pixbuf = try window.mapPixels();
+        try game.render(pixbuf, 0.00);
+        try window.submitPixels();
     }
 
-    // try draw.init(global_allocator, 800, 600, start, update);
-    // end();
+    std.time.sleep(500 * std.time.ns_per_ms);
+
+    while (true) {
+        const pixbuf = try window.mapPixels();
+        try game.render(pixbuf, 0.01); // 10ms, not true, but ¯\_(ツ)_/¯
+        try window.submitPixels();
+    }
 
     return 0;
 }

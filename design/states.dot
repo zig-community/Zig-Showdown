@@ -10,9 +10,10 @@ digraph {
   create_server [label="Create Multiplayer Game"];
   join_game [label="Join Multiplayer Game"];
   create_sp_game [label="Create Singleplayer Game"];
-  game [label="Main Menu"];
+  game [label="Gameplay"];
   pause_menu [label="Pause Menu"];
   options_ingame [label="Options (Ingame)"];
+  mainmenu [label="Main Menu"];
 
   init -> splash -> mainmenu;
 

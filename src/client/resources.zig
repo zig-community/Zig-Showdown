@@ -1,9 +1,5 @@
 const std = @import("std");
 
-/// Usage mask type that is used to mark usage of resources.
-/// Each bit represents a certain usage type
-pub const Mask = u64;
-
 //! This implements a resource management system that has a garbage collection
 //! model and can be used for easy loading/unloading of resources.
 //!
@@ -41,18 +37,21 @@ pub const Mask = u64;
 //!   - Would allow really fast lookups of resources (no string translation required)
 //!   - Make this the mode that is used in release modes (@embedFile the resources, don't use fs, make getName not fail at all)
 
+pub const Error = error{ OutOfMemory, InvalidData };
+
+/// Usage mask type that is used to mark usage of resources.
+/// Each bit represents a certain usage type
+pub const Mask = u64;
+
 /// A resource manager for a given type.
 /// Resources are obtained via a resource name (string identifier)
 /// and will be alive until no one referenced them anymore.
 /// Resources will be freed afterwards when necessary.
-/// T must have this interface:
-/// ```
-/// const T = struct {
-///   pub fn load(buffer: []const u8, extension_hint: []const u8) !T;
-///   pub fn deinit(self: *T);
-/// };
-/// ```
-pub fn ResourceManager(comptime T: type) type {
+pub fn ResourceManager(
+    comptime T: type,
+    loadFn: fn (allocator: *std.mem.Allocator, buffer: []const u8, extension_hint: []const u8) Error!T,
+    freeFn: fn (allocator: *std.mem.Allocator, self: *T) void,
+) type {
     return struct {
         const Self = @This();
 
@@ -109,7 +108,7 @@ pub fn ResourceManager(comptime T: type) type {
 
         pub fn deinit(self: *Self) void {
             for (self.resources.items()) |*item| {
-                item.value.resource.deinit();
+                freeFn(self.allocator, &item.value.resource);
             }
 
             self.resource_names.deinit(self.allocator);
@@ -148,7 +147,7 @@ pub fn ResourceManager(comptime T: type) type {
                 if (items[i].value.usage == 0) {
                     // delete all unused resources
                     var old_entry = self.resources.remove(items[i].key) orelse unreachable;
-                    old_entry.value.resource.deinit();
+                    freeFn(self.allocator, &old_entry.value.resource);
                     len -= 1; // swapRemove keeps the next item at `i`, but reduces length
                 } else {
                     // keep iterating
@@ -192,7 +191,8 @@ pub fn ResourceManager(comptime T: type) type {
 
                 gopr.entry.value = ManagedResource{
                     .usage = 0,
-                    .resource = try Resource.load(
+                    .resource = try loadFn(
+                        self.allocator,
                         buffer,
                         filePathExtension(file_name),
                     ),

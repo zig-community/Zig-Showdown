@@ -6,6 +6,14 @@ const draw = @import("pixel_draw");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
 
+const resources = struct {
+    usingnamespace @import("resources.zig");
+
+    const usage_generic_render = 0x01;
+
+    var textures: ResourceManager(draw.Texture, loadTexture, freeTexture) = undefined;
+};
+
 pub fn main() anyerror!u8 {
     defer _ = gpa.deinit();
 
@@ -26,7 +34,8 @@ pub fn main() anyerror!u8 {
         return 0;
     }
 
-    std.log.info("All your codebase are belong to us.", .{});
+    resources.textures = @TypeOf(resources.textures).init(global_allocator);
+    defer resources.textures.deinit();
 
     try draw.init(global_allocator, 800, 600, start, update);
     end();
@@ -60,8 +69,17 @@ fn printUsage(writer: anytype) !void {
 // Potato demo code
 var quad_mesh: draw.Mesh = undefined;
 var font: draw.BitmapFont = undefined;
-var potato: draw.Texture = undefined;
-var bad_floor: draw.Texture = undefined;
+
+fn loadTexture(allocator: *std.mem.Allocator, buffer: []const u8, hint: []const u8) resources.Error!draw.Texture {
+    return draw.textureFromTgaData(allocator, buffer) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.InvalidData,
+    };
+}
+fn freeTexture(allocator: *std.mem.Allocator, self: *draw.Texture) void {
+    allocator.free(self.raw);
+    self.* = undefined;
+}
 
 fn start() void {
     font = .{
@@ -70,10 +88,17 @@ fn start() void {
         .font_size_y = 16,
         .character_spacing = 11,
     };
-    potato = draw.textureFromTgaData(global_allocator, @embedFile("../../assets/potato.tga")) catch unreachable;
-    bad_floor = draw.textureFromTgaData(global_allocator, @embedFile("../../assets/bad_floor.tga")) catch unreachable;
 
-    cube_mesh.texture = potato;
+    const bad_floor = resources.textures.get(
+        resources.textures.getName("/assets/bad_floor.tga") catch unreachable,
+        resources.usage_generic_render,
+    ) catch unreachable;
+
+    cube_mesh.texture = resources.textures.get(
+        resources.textures.getName("/assets/potato.tga") catch unreachable,
+        resources.usage_generic_render,
+    ) catch unreachable;
+
     quad_mesh = draw.createQuadMesh(global_allocator, 21, 21, 10.5, 10.5, bad_floor, .Tile);
 
     for (quad_mesh.v) |*v| {
@@ -84,9 +109,7 @@ fn start() void {
 
 fn end() void {
     global_allocator.free(font.texture.raw);
-    global_allocator.free(potato.raw);
 
-    global_allocator.free(bad_floor.raw);
     global_allocator.free(quad_mesh.v);
     global_allocator.free(quad_mesh.i);
 }

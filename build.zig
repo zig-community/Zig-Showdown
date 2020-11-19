@@ -13,12 +13,17 @@ const pkgs = struct {
 
     const pixel_draw = std.build.Pkg{
         .name = "pixel_draw",
-        .path = "./deps/pixel_draw/src/pixel_draw.zig",
+        .path = "./deps/pixel_draw/src/pixel_draw_module.zig",
     };
 
     const zwl = std.build.Pkg{
         .name = "zwl",
         .path = "./deps/zwl/src/zwl.zig",
+    };
+
+    const painterz = std.build.Pkg{
+        .name = "painterz",
+        .path = "./deps/painterz/painterz.zig",
     };
 };
 
@@ -34,8 +39,12 @@ pub fn build(b: *std.build.Builder) void {
         client.addPackage(pkgs.args);
         client.addPackage(pkgs.pixel_draw);
         client.addPackage(pkgs.zwl);
+        client.addPackage(pkgs.painterz);
         client.setTarget(target);
         client.setBuildMode(mode);
+
+        client.linkLibC();
+        client.linkSystemLibrary("m");
 
         // // NOTE(Samuel): This is temporary
         // if (@import("builtin").os.tag != .windows) {

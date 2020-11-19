@@ -3,7 +3,7 @@ const network = @import("network");
 const args = @import("args");
 const zwl = @import("zwl");
 
-const Game = @import("game.zig").Game;
+const Game = @import("game.zig");
 
 const Resources = @import("game_resources.zig");
 
@@ -62,18 +62,6 @@ pub fn main() anyerror!u8 {
 
     var game = try Game.init(global_allocator, &resources);
     defer game.deinit();
-
-    game.current_state = .{
-        .transition = .{
-            .from = .splash,
-            .to = .gameplay,
-            .progress = 0.0,
-            .style = .slice_bl_to_tr,
-            .duration = 0.25,
-        },
-    };
-    // game.current_state = .{ .state = .gameplay };
-
     //main_loop: while (true) {
     // const event = try platform.waitForEvent();
 
@@ -90,14 +78,6 @@ pub fn main() anyerror!u8 {
     //         std.log.debug("Taking damage: {}x{} @ {}x{}", .{ damage.w, damage.h, damage.x, damage.y });
     //     },
     // }
-
-    {
-        const pixbuf = try window.mapPixels();
-        try game.render(pixbuf, 0.00);
-        try window.submitPixels();
-    }
-
-    std.time.sleep(500 * std.time.ns_per_ms);
 
     while (true) {
         try game.update(0.01);

@@ -10,3 +10,6 @@
 [submodule "deps/zwl"]
 	path = deps/zwl
 	url = https://github.com/Aransentin/ZWL
+[submodule "deps/painterz"]
+	path = deps/painterz
+	url = https://github.com/ziglibs/painterz

@@ -1,5 +1,6 @@
 const std = @import("std");
 const zwl = @import("zwl");
+const math = @import("math.zig");
 
 pub const Style = enum {
     /// no fading, just flip shortly to black and then to the next image
@@ -41,18 +42,18 @@ pub fn render(src_from: zwl.PixelBuffer, src_to: zwl.PixelBuffer, dest: zwl.Pixe
 
         .in_and_out => if (progress <= 0.5) {
             for (dest.span()) |*d, i| {
-                d.* = lerpPixel(src_from.data[i], 0, smoothstep(2.0 * progress));
+                d.* = lerpPixel(src_from.data[i], 0, math.smoothstep(2.0 * progress));
             }
         } else {
             for (dest.span()) |*d, i| {
-                d.* = lerpPixel(0, src_to.data[i], smoothstep(2.0 * (progress - 0.5)));
+                d.* = lerpPixel(0, src_to.data[i], math.smoothstep(2.0 * (progress - 0.5)));
             }
         },
 
         .slice_bl_to_tr => {
             const limit = dest.width + dest.height;
 
-            const threshold = @floatToInt(usize, smoothstep(progress) * @intToFloat(f32, limit));
+            const threshold = @floatToInt(usize, math.smoothstep(progress) * @intToFloat(f32, limit));
 
             var y: usize = 0;
             while (y < dest.height) : (y += 1) {
@@ -70,7 +71,7 @@ pub fn render(src_from: zwl.PixelBuffer, src_to: zwl.PixelBuffer, dest: zwl.Pixe
         .slice_tr_to_bl => {
             const limit = dest.width + dest.height;
 
-            const threshold = @floatToInt(usize, smoothstep(progress) * @intToFloat(f32, limit));
+            const threshold = @floatToInt(usize, math.smoothstep(progress) * @intToFloat(f32, limit));
 
             var y: usize = 0;
             while (y < dest.height) : (y += 1) {
@@ -100,9 +101,4 @@ fn lerpPixel(a: u32, b: u32, f: f32) u32 {
         .b = lerp8(pa.b, pb.b, f),
         .a = lerp8(pa.a, pb.a, f),
     });
-}
-
-fn smoothstep(x: f32) f32 {
-    const t = std.math.clamp(x, 0.0, 1.0);
-    return t * t * (3.0 - 2.0 * t);
 }

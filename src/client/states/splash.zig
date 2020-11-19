@@ -5,6 +5,7 @@ const std = @import("std");
 const zwl = @import("zwl");
 const painterz = @import("painterz");
 const math = @import("../math.zig");
+const theme = @import("../theme.zig");
 
 const Game = @import("../game.zig");
 
@@ -41,10 +42,8 @@ pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
     }
 }
 
-const zig_yellow = zwl.Pixel{ .r = 0xF7, .g = 0xA4, .b = 0x1D };
-
 pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {
-    std.mem.set(u32, render_target.span(), @bitCast(u32, zwl.Pixel{ .r = 0x11, .g = 0x11, .b = 0x11 }));
+    std.mem.set(u32, render_target.span(), @bitCast(u32, theme.zig_dark));
 
     var canvas = Canvas.init(render_target);
 
@@ -61,7 +60,7 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
         mid_y - 50,
         mid_x - 50 + line_length,
         mid_y - 50,
-        zig_yellow,
+        theme.zig_yellow,
     );
 
     canvas.drawLine(
@@ -69,7 +68,7 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
         mid_y - 50,
         mid_x + 50 - line_length,
         mid_y - 50 + line_length,
-        zig_yellow,
+        theme.zig_yellow,
     );
 
     canvas.drawLine(
@@ -77,6 +76,6 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
         mid_y + 50,
         mid_x + 50,
         mid_y + 50,
-        zig_yellow,
+        theme.zig_yellow,
     );
 }

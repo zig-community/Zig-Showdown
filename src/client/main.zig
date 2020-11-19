@@ -79,11 +79,16 @@ pub fn main() anyerror!u8 {
     //     },
     // }
 
+    var time_stamp: i64 = std.time.milliTimestamp();
     while (true) {
-        try game.update(0.01);
+        const new_time_stamp = std.time.milliTimestamp();
+        defer time_stamp = new_time_stamp;
+        const delta = 0.001 * @intToFloat(f32, new_time_stamp - time_stamp);
+
+        try game.update(delta);
 
         const pixbuf = try window.mapPixels();
-        try game.render(pixbuf, 0.01); // 10ms, not true, but ¯\_(ツ)_/¯
+        try game.render(pixbuf, delta);
         try window.submitPixels();
     }
 

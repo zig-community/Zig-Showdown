@@ -60,11 +60,18 @@ current_item: usize = 0,
 timer: f32 = 0.0,
 
 items_font_id: Resources.TexturePool.ResourceName,
+background_ids: [3]Resources.TexturePool.ResourceName,
+current_background: usize = 0,
 
 pub fn init(resources: *Resources) !Self {
     return Self{
         .resources = resources,
         .items_font_id = try resources.textures.getName("/assets/font.tga"),
+        .background_ids = [3]Resources.TexturePool.ResourceName{
+            try resources.textures.getName("/assets/backgrounds/matte-01.tga"),
+            try resources.textures.getName("/assets/backgrounds/matte-02.tga"),
+            try resources.textures.getName("/assets/backgrounds/matte-03.tga"),
+        },
     };
 }
 
@@ -75,6 +82,10 @@ pub fn enter(self: *Self, total_time: f32) !void {
 
     self.current_item = 0;
     self.items[self.current_item].extension = 1.0;
+
+    var rng = std.rand.DefaultPrng.init(@bitCast(u64, std.time.timestamp()));
+
+    self.current_background = rng.random.intRangeLessThan(usize, 0, 3);
 }
 
 pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
@@ -99,13 +110,34 @@ fn fetchFontPixel(font: Resources.TexturePool.Resource, ix: isize, iy: isize) zw
         theme.zig_yellow;
 }
 
-pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {
-    // clear screen
-    std.mem.set(u32, render_target.span(), @bitCast(u32, theme.zig_dark));
+fn fetchImagePixel(font: Resources.TexturePool.Resource, ix: isize, iy: isize) zwl.Pixel {
+    const x = std.math.cast(usize, ix) catch return theme.zig_yellow;
+    const y = std.math.cast(usize, iy) catch return theme.zig_yellow;
+    if (x >= font.width or y >= font.height) return theme.zig_yellow;
 
+    return zwl.Pixel{
+        .r = font.raw[4 * (font.width * y + x) + 0],
+        .g = font.raw[4 * (font.width * y + x) + 1],
+        .b = font.raw[4 * (font.width * y + x) + 2],
+        .a = font.raw[4 * (font.width * y + x) + 3],
+    };
+}
+
+pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {
     var canvas = Canvas.init(render_target);
 
     const font = try self.resources.textures.get(self.items_font_id, Resources.usage.menu_render);
+    const background = try self.resources.textures.get(self.background_ids[self.current_background], Resources.usage.menu_render);
+    canvas.copyRectangle(
+        0,
+        0,
+        0,
+        0,
+        render_target.width,
+        render_target.height,
+        background,
+        fetchImagePixel,
+    );
 
     const glyph_w = font.width / 16;
     const glyph_h = font.height / 16;

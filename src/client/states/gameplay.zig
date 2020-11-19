@@ -81,7 +81,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
 
     const bad_floor = resources.textures.get(
         resources.textures.getName("/assets/bad_floor.tga") catch unreachable,
-        Resources.usage_generic_render,
+        Resources.usage.generic_render,
     ) catch unreachable;
 
     self.cube_mesh = draw.Mesh{
@@ -91,7 +91,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
     };
     self.cube_mesh.texture = resources.textures.get(
         resources.textures.getName("/assets/potato.tga") catch unreachable,
-        Resources.usage_generic_render,
+        Resources.usage.generic_render,
     ) catch unreachable;
 
     self.quad_mesh = draw.createQuadMesh(

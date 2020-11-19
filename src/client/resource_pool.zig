@@ -60,7 +60,7 @@ pub fn ResourcePool(
 
         /// A unique handle that represents a resource in the system.
         /// Resource names are only unique in regard to a ResourceManager though.
-        const ResourceName = enum(u32) { _ }; // u32 should be enough resources for everyone
+        pub const ResourceName = enum(u32) { _ }; // u32 should be enough resources for everyone
 
         /// A resource that is managed by this structure.
         const ManagedResource = struct {

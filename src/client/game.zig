@@ -80,7 +80,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .credits = .{},
         .gameplay = undefined,
         .join_game = .{},
-        .main_menu = .{},
+        .main_menu = undefined,
         .options = .{},
         .pause_menu = .{},
         .splash = states.Splash.init(),
@@ -88,6 +88,8 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .transition_buffer_from = undefined,
         .transition_buffer_to = undefined,
     };
+
+    game.main_menu = try states.MainMenu.init(resources);
 
     game.gameplay = try states.Gameplay.init(allocator, resources);
     errdefer game.gameplay.deinit();

@@ -4,9 +4,12 @@ const draw = @import("pixel_draw");
 
 const Self = @This();
 
-pub const usage_generic_render = 0x01;
+pub const usage = struct {
+    pub const generic_render = 0x01;
+    pub const menu_render = 0x02;
+};
 
-const TexturePool = res.ResourcePool(draw.Texture, loadTexture, freeTexture);
+pub const TexturePool = res.ResourcePool(draw.Texture, loadTexture, freeTexture);
 
 textures: TexturePool,
 

@@ -58,19 +58,53 @@ fn addClientPackages(exe: *std.build.LibExeObjStep) void {
     exe.addPackage(pkgs.pixel_draw);
     exe.addPackage(pkgs.zwl);
     exe.addPackage(pkgs.painterz);
-    exe.addPackage(pkgs.zlm);
-    exe.addPackage(pkgs.wavefront_obj);
 }
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const default_port = b.option(u16, "default-port", "The port the game will use as its default port") orelse 3315;
+    const default_port = b.option(
+        u16,
+        "default-port",
+        "The port the game will use as its default port",
+    ) orelse 3315;
+    const initial_state = b.option(
+        State,
+        "initial-state",
+        "The initial state of the game. This is only relevant for debugging.",
+    ) orelse .splash;
+    const enable_frame_counter = b.option(
+        bool,
+        "enable-fps-counter",
+        "Enables the FPS counter as an overlay.",
+    ) orelse (mode == .Debug);
 
-    const initial_state = b.option(State, "initial-state", "The initial state of the game. This is only relevant for debugging.") orelse .splash;
+    {
+        const obj_conv = b.addExecutable("obj-conv", "src/tools/obj-conv.zig");
+        obj_conv.addPackage(pkgs.args);
+        obj_conv.addPackage(pkgs.zlm);
+        obj_conv.addPackage(pkgs.wavefront_obj);
 
-    const enable_frame_counter = b.option(bool, "enable-fps-counter", "Enables the FPS counter as an overlay.") orelse (mode == .Debug);
+        const tools_step = b.step("tools", "Compiles all tools required in the build process");
+        tools_step.dependOn(&obj_conv.step);
+
+        const assets_step = b.step("assets", "Compiles all assets to their final format");
+
+        // precompile all asset files:
+        {
+            var walker = try std.fs.walkPath(b.allocator, "assets");
+            defer walker.deinit();
+
+            while (try walker.next()) |entry| {
+                if (std.mem.endsWith(u8, entry.path, ".obj")) {
+                    const convert_file = obj_conv.run();
+                    convert_file.addArg(entry.path);
+                    assets_step.dependOn(&convert_file.step);
+                }
+            }
+        }
+    }
 
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");

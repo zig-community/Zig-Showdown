@@ -13,3 +13,9 @@
 [submodule "deps/painterz"]
 	path = deps/painterz
 	url = https://github.com/ziglibs/painterz
+[submodule "deps/zlm"]
+	path = deps/zlm
+	url = https://github.com/ziglibs/zlm
+[submodule "deps/wavefront-obj"]
+	path = deps/wavefront-obj
+	url = https://github.com/ziglibs/wavefront-obj.git

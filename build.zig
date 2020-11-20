@@ -25,6 +25,19 @@ const pkgs = struct {
         .name = "painterz",
         .path = "./deps/painterz/painterz.zig",
     };
+
+    const zlm = std.build.Pkg{
+        .name = "zlm",
+        .path = "./deps/zlm/zlm.zig",
+    };
+
+    const wavefront_obj = std.build.Pkg{
+        .name = "wavefront-obj",
+        .path = "./deps/wavefront-obj/wavefront-obj.zig",
+        .dependencies = &[_]std.build.Pkg{
+            zlm,
+        },
+    };
 };
 
 const State = enum {
@@ -39,6 +52,16 @@ const State = enum {
     splash,
 };
 
+fn addClientPackages(exe: *std.build.LibExeObjStep) void {
+    exe.addPackage(pkgs.network);
+    exe.addPackage(pkgs.args);
+    exe.addPackage(pkgs.pixel_draw);
+    exe.addPackage(pkgs.zwl);
+    exe.addPackage(pkgs.painterz);
+    exe.addPackage(pkgs.zlm);
+    exe.addPackage(pkgs.wavefront_obj);
+}
+
 pub fn build(b: *std.build.Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
@@ -51,26 +74,21 @@ pub fn build(b: *std.build.Builder) void {
 
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
-        client.addPackage(pkgs.network);
-        client.addPackage(pkgs.args);
-        client.addPackage(pkgs.pixel_draw);
-        client.addPackage(pkgs.zwl);
-        client.addPackage(pkgs.painterz);
-        client.setTarget(target);
-        client.setBuildMode(mode);
+        addClientPackages(client);
+
         client.addBuildOption(State, "initial_state", initial_state);
         client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
-
-        client.linkLibC();
-        client.linkSystemLibrary("m");
-
-        // // NOTE(Samuel): This is temporary
-        // if (@import("builtin").os.tag != .windows) {
-        //     client.linkSystemLibrary("c");
-        //     client.linkSystemLibrary("X11");
-        // }
-
         client.addBuildOption(u16, "default_port", default_port);
+
+        client.setTarget(target);
+        client.setBuildMode(mode);
+
+        if (mode != .Debug) {
+            // TODO: Workaround for
+            client.linkLibC();
+            client.linkSystemLibrary("m");
+        }
+
         client.install();
 
         const run_client_cmd = client.run();
@@ -99,5 +117,26 @@ pub fn build(b: *std.build.Builder) void {
 
         const run_server_step = b.step("run-server", "Run the app");
         run_server_step.dependOn(&run_server_cmd.step);
+    }
+
+    {
+        const test_client = b.addTest("src/client/main.zig");
+        addClientPackages(test_client);
+
+        test_client.addBuildOption(State, "initial_state", initial_state);
+        test_client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
+        test_client.addBuildOption(u16, "default_port", default_port);
+
+        test_client.setTarget(target);
+        test_client.setBuildMode(mode);
+
+        if (mode != .Debug) {
+            // TODO: Workaround for
+            test_client.linkLibC();
+            test_client.linkSystemLibrary("m");
+        }
+
+        const test_step = b.step("test", "Runs the test suite for both client and server implementation");
+        test_step.dependOn(&test_client.step);
     }
 }

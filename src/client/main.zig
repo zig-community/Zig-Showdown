@@ -117,3 +117,8 @@ fn printUsage(writer: anytype) !void {
         \\Someone should write this
     );
 }
+
+test "" {
+    _ = @import("resource_pool.zig");
+    _ = @import("resources/map.zig");
+}

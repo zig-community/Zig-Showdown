@@ -230,19 +230,19 @@ test "ResourceManager" {
 
         var leak_counter: usize = 0;
 
-        pub fn load(data: []const u8, ext: []const u8) !Self {
+        pub fn load(allocator: *std.mem.Allocator, data: []const u8, ext: []const u8) Error!Self {
             leak_counter += 1;
             return Self{};
         }
 
-        pub fn deinit(self: *Self) void {
+        pub fn deinit(allocator: *std.mem.Allocator, self: *Self) void {
             self.* = undefined;
             leak_counter -= 1;
         }
     };
 
     {
-        var manager = ResourceManager(R).init(std.testing.allocator);
+        var manager = ResourcePool(R, R.load, R.deinit).init(std.testing.allocator);
         defer manager.deinit();
 
         var n0_1 = try manager.getName("/foo/bar/bam");

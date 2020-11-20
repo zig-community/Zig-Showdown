@@ -1,5 +1,6 @@
 const std = @import("std");
 const zwl = @import("zwl");
+const build_options = @import("build_options");
 const transitions = @import("transitions.zig");
 
 const Self = @This();
@@ -20,17 +21,18 @@ const states = struct {
     pub const Splash = @import("states/splash.zig");
 };
 
-const State = enum {
-    create_server,
-    create_sp_game,
-    credits,
-    gameplay,
-    join_game,
-    main_menu,
-    options,
-    pause_menu,
-    splash,
-};
+const State = build_options.State;
+//  enum {
+//     create_server,
+//     create_sp_game,
+//     credits,
+//     gameplay,
+//     join_game,
+//     main_menu,
+//     options,
+//     pause_menu,
+//     splash,
+// };
 
 const StateTransition = struct {
     from: State,
@@ -58,7 +60,9 @@ options: states.Options,
 pause_menu: states.PauseMenu,
 splash: states.Splash,
 
-current_state: StateAndTransition = .{ .state = .splash },
+current_state: StateAndTransition = .{
+    .state = build_options.initial_state,
+},
 next_state: ?State = null,
 
 transition_buffer_from: []u32,

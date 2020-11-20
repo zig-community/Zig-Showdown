@@ -27,11 +27,25 @@ const pkgs = struct {
     };
 };
 
+const State = enum {
+    create_server,
+    create_sp_game,
+    credits,
+    gameplay,
+    join_game,
+    main_menu,
+    options,
+    pause_menu,
+    splash,
+};
+
 pub fn build(b: *std.build.Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
     const default_port = b.option(u16, "default-port", "The port the game will use as its default port") orelse 3315;
+
+    const initial_state = b.option(State, "initial-state", "The initial state of the game. This is only relevant for debugging.") orelse .splash;
 
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
@@ -42,6 +56,7 @@ pub fn build(b: *std.build.Builder) void {
         client.addPackage(pkgs.painterz);
         client.setTarget(target);
         client.setBuildMode(mode);
+        client.addBuildOption(State, "initial_state", initial_state);
 
         client.linkLibC();
         client.linkSystemLibrary("m");

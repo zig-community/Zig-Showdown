@@ -47,6 +47,8 @@ pub fn build(b: *std.build.Builder) void {
 
     const initial_state = b.option(State, "initial-state", "The initial state of the game. This is only relevant for debugging.") orelse .splash;
 
+    const enable_frame_counter = b.option(bool, "enable-fps-counter", "Enables the FPS counter as an overlay.") orelse (mode == .Debug);
+
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
         client.addPackage(pkgs.network);
@@ -57,6 +59,7 @@ pub fn build(b: *std.build.Builder) void {
         client.setTarget(target);
         client.setBuildMode(mode);
         client.addBuildOption(State, "initial_state", initial_state);
+        client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
 
         client.linkLibC();
         client.linkSystemLibrary("m");

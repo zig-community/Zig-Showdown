@@ -2,6 +2,7 @@ const std = @import("std");
 const zwl = @import("zwl");
 const build_options = @import("build_options");
 const transitions = @import("transitions.zig");
+const draw = @import("pixel_draw");
 
 const Self = @This();
 const Resources = @import("game_resources.zig");
@@ -74,6 +75,9 @@ update_time: f32 = 0.0,
 /// total time spent in drawing
 render_time: f32 = 0.0,
 
+// used resources:
+font_id: Resources.TexturePool.ResourceName,
+
 pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
     var game = Self{
         .allocator = allocator,
@@ -91,6 +95,8 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
 
         .transition_buffer_from = undefined,
         .transition_buffer_to = undefined,
+
+        .font_id = try resources.textures.getName("/assets/font.tga"),
     };
 
     game.main_menu = try states.MainMenu.init(resources);
@@ -240,6 +246,30 @@ pub fn render(self: *Self, target: zwl.PixelBuffer, delta_time: f32) !void {
                 };
             }
         },
+    }
+
+    if (build_options.enable_frame_counter) { // Show frame time counter
+        var b = draw.Buffer{
+            .width = target.width,
+            .height = target.height,
+            .screen = std.mem.sliceAsBytes(target.span()),
+            .depth = undefined, // doesn't hurt as we're only doing 2D rendering
+        };
+
+        const font = draw.BitmapFont{
+            .texture = try self.resources.textures.get(self.font_id, Resources.usage.debug_draw),
+            .font_size_x = 12,
+            .font_size_y = 16,
+            .character_spacing = 11,
+        };
+
+        var print_buff: [128]u8 = undefined;
+        const fpst = try std.fmt.bufPrint(
+            &print_buff,
+            "{d: >6.2} ms / {d: >4.0} FPS",
+            .{ 1000.0 * delta_time, 1 / delta_time },
+        );
+        b.drawBitmapFont(fpst, 20, 20, 1, 1, font);
     }
 }
 

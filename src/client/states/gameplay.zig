@@ -164,15 +164,4 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
 
     b.drawMesh(self.quad_mesh, .Texture, self.cam);
     b.drawMesh(self.cube_mesh, .Texture, self.cam);
-
-    { // Show fps
-        var print_buff: [64]u8 = undefined;
-        const fpst = try std.fmt.bufPrint(
-            &print_buff,
-            "{d:4.4}FPS / {d:2.4}ms",
-            .{ 1 / delta_time, delta_time },
-        );
-        std.debug.print("{}\n", .{fpst});
-        b.drawBitmapFont(fpst, 20, 20, 1, 1, self.font);
-    }
 }

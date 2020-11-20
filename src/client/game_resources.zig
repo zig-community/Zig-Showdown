@@ -5,8 +5,9 @@ const draw = @import("pixel_draw");
 const Self = @This();
 
 pub const usage = struct {
-    pub const generic_render = 0x01;
-    pub const menu_render = 0x02;
+    pub const generic_render: u32 = 1;
+    pub const menu_render: u32 = 2;
+    pub const debug_draw: u32 = 0x80000000;
 };
 
 pub const TexturePool = res.ResourcePool(draw.Texture, loadTexture, freeTexture);

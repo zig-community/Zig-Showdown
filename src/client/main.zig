@@ -79,11 +79,9 @@ pub fn main() anyerror!u8 {
     //     },
     // }
 
-    var time_stamp: i64 = std.time.milliTimestamp();
+    var timer = try std.time.Timer.start();
     while (true) {
-        const new_time_stamp = std.time.milliTimestamp();
-        defer time_stamp = new_time_stamp;
-        const delta = 0.001 * @intToFloat(f32, new_time_stamp - time_stamp);
+        const delta = @intToFloat(f32, timer.lap()) / std.time.ns_per_s;
 
         try game.update(delta);
 

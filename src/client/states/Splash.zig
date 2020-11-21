@@ -7,7 +7,7 @@ const painterz = @import("painterz");
 const math = @import("../math.zig");
 const theme = @import("../theme.zig");
 
-const Game = @import("../game.zig");
+const Game = @import("../Game.zig");
 
 const Canvas = painterz.Canvas(zwl.PixelBuffer, zwl.Pixel, struct {
     fn setPixel(buf: zwl.PixelBuffer, x: isize, y: isize, col: zwl.Pixel) void {

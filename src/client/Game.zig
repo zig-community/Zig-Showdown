@@ -5,21 +5,21 @@ const transitions = @import("transitions.zig");
 const draw = @import("pixel_draw");
 
 const Self = @This();
-const Resources = @import("game_resources.zig");
+const Resources = @import("Resources.zig");
 const WindowPlatform = @import("root").WindowPlatform;
 
 ///! The core management structure for the game. This is
 ///! mostly platform independent game logic and rendering implementation.
 const states = struct {
-    pub const CreateServer = @import("states/create_server.zig");
-    pub const CreateSpGame = @import("states/create_sp_game.zig");
-    pub const Credits = @import("states/credits.zig");
-    pub const Gameplay = @import("states/gameplay.zig");
-    pub const JoinGame = @import("states/join_game.zig");
-    pub const MainMenu = @import("states/main_menu.zig");
-    pub const Options = @import("states/options.zig");
-    pub const PauseMenu = @import("states/pause_menu.zig");
-    pub const Splash = @import("states/splash.zig");
+    pub const CreateServer = @import("states/CreateServer.zig");
+    pub const CreateSpGame = @import("states/CreateSpGame.zig");
+    pub const Credits = @import("states/Credits.zig");
+    pub const Gameplay = @import("states/Gameplay.zig");
+    pub const JoinGame = @import("states/JoinGame.zig");
+    pub const MainMenu = @import("states/MainMenu.zig");
+    pub const Options = @import("states/Options.zig");
+    pub const PauseMenu = @import("states/PauseMenu.zig");
+    pub const Splash = @import("states/Splash.zig");
 };
 
 const State = build_options.State;

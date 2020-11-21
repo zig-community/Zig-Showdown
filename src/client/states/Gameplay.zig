@@ -11,7 +11,7 @@ const zwl = @import("zwl");
 const draw = @import("pixel_draw");
 
 const Self = @This();
-const Resources = @import("../game_resources.zig");
+const Resources = @import("../Resources.zig");
 
 allocator: *std.mem.Allocator,
 resources: *Resources,

@@ -7,8 +7,8 @@ const zwl = @import("zwl");
 const painterz = @import("painterz");
 const theme = @import("../theme.zig");
 const math = @import("../math.zig");
-const Game = @import("../game.zig");
-const Resources = @import("../game_resources.zig");
+const Game = @import("../Game.zig");
+const Resources = @import("../Resources.zig");
 
 const Self = @This();
 

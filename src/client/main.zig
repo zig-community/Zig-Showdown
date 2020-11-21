@@ -3,9 +3,9 @@ const network = @import("network");
 const args = @import("args");
 const zwl = @import("zwl");
 
-const Game = @import("game.zig");
+const Game = @import("Game.zig");
 
-const Resources = @import("game_resources.zig");
+const Resources = @import("Resources.zig");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
@@ -118,5 +118,5 @@ fn printUsage(writer: anytype) !void {
 
 test "" {
     _ = @import("resource_pool.zig");
-    _ = @import("resources/map.zig");
+    _ = @import("resources/Model.zig");
 }

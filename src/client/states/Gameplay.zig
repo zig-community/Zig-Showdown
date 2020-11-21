@@ -18,41 +18,16 @@ resources: *Resources,
 
 z_buffer: []f32,
 
-// Potato demo code
-quad_mesh: draw.Mesh,
-cube_mesh: draw.Mesh,
-font: draw.BitmapFont,
+level_texture_id: Resources.TexturePool.ResourceName,
+level_model_id: Resources.ModelPool.ResourceName,
 
 cam: draw.Camera3D = .{
-    .pos = .{ .z = 2.0 },
+    .pos = .{
+        .x = 0.0,
+        .y = 0.5,
+        .z = 0.0,
+    },
 },
-
-var cube_v = [_]draw.vector_math.Vertex{
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(-0.5, 0.5, 0.5), draw.vector_math.Vec2.c(0, 1)),
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(0.5, 0.5, 0.5), draw.vector_math.Vec2.c(1, 1)),
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(-0.5, -0.5, 0.5), draw.vector_math.Vec2.c(0, 0)),
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(0.5, -0.5, 0.5), draw.vector_math.Vec2.c(1, 0)),
-
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(-0.5, 0.5, -0.5), draw.vector_math.Vec2.c(1, 1)),
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(0.5, 0.5, -0.5), draw.vector_math.Vec2.c(0, 1)),
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(-0.5, -0.5, -0.5), draw.vector_math.Vec2.c(1, 0)),
-    draw.vector_math.Vertex.c(draw.vector_math.Vec3.c(0.5, -0.5, -0.5), draw.vector_math.Vec2.c(0, 0)),
-};
-
-var cube_i = [_]u32{
-    0, 2, 3,
-    0, 3, 1,
-    1, 3, 7,
-    1, 7, 5,
-    4, 0, 1,
-    4, 1, 5,
-    4, 6, 2,
-    4, 2, 0,
-    6, 3, 2,
-    6, 7, 3,
-    5, 7, 6,
-    5, 6, 4,
-};
 
 pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
     var self = Self{
@@ -61,59 +36,20 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
 
         .z_buffer = undefined,
 
-        .quad_mesh = undefined,
-        .cube_mesh = undefined,
-        .font = undefined,
+        .level_texture_id = undefined,
+        .level_model_id = undefined,
     };
 
     self.z_buffer = try allocator.alloc(f32, 0);
     errdefer allocator.free(self.z_buffer);
 
-    self.font = .{
-        .texture = try draw.textureFromTgaData(
-            self.allocator,
-            @embedFile("../../../assets/font.tga"),
-        ),
-        .font_size_x = 12,
-        .font_size_y = 16,
-        .character_spacing = 11,
-    };
-
-    const bad_floor = resources.textures.get(
-        resources.textures.getName("/assets/bad_floor.tga") catch unreachable,
-        Resources.usage.generic_render,
-    ) catch unreachable;
-
-    self.cube_mesh = draw.Mesh{
-        .v = &cube_v,
-        .i = &cube_i,
-        .texture = undefined,
-    };
-    self.cube_mesh.texture = resources.textures.get(
-        resources.textures.getName("/assets/potato.tga") catch unreachable,
-        Resources.usage.generic_render,
-    ) catch unreachable;
-
-    self.quad_mesh = draw.createQuadMesh(
-        self.allocator,
-        21,
-        21,
-        10.5,
-        10.5,
-        bad_floor,
-        .Tile,
-    );
-
-    for (self.quad_mesh.v) |*v| {
-        v.pos = draw.vector_math.rotateVectorOnX(v.pos, 3.1415926535 * 0.5);
-        v.pos.y -= 0.5;
-    }
+    self.level_texture_id = try resources.textures.getName("/assets/bad_floor.tga");
+    self.level_model_id = try self.resources.models.getName("/assets/maps/demo.mdl");
 
     return self;
 }
 
 pub fn deinit(self: *Self) void {
-    self.allocator.free(self.font.texture.raw);
     self.allocator.free(self.z_buffer);
     self.* = undefined;
 }
@@ -160,8 +96,44 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
 
     b.fillScreenWithRGBColor(50, 100, 150);
 
-    // NOTE(Samuel): Mesh Transformation
+    const level_model = try self.resources.models.get(
+        self.level_model_id,
+        Resources.usage.level_render,
+    );
 
-    b.drawMesh(self.quad_mesh, .Texture, self.cam);
-    b.drawMesh(self.cube_mesh, .Texture, self.cam);
+    // ugly workaround to draw meshes with pixel_draw:
+    // converts between immutable data and mutable data
+
+    const level_texture = try self.resources.textures.get(
+        self.level_texture_id,
+        Resources.usage.generic_render,
+    );
+
+    var index: usize = 0;
+    while (index < level_model.indices.len) : (index += 3) {
+        var vertices: [3]draw.Vertex = undefined;
+        for (vertices) |*dv, i| {
+            const sv = level_model.vertices[level_model.indices[index + i]];
+            dv.* = draw.Vertex{
+                .pos = .{
+                    .x = sv.x,
+                    .y = sv.y,
+                    .z = sv.z,
+                },
+                .uv = .{
+                    .x = sv.u,
+                    .y = sv.v,
+                },
+            };
+        }
+        var indices = [3]u32{ 0, 1, 2 };
+
+        var mesh = draw.Mesh{
+            .v = &vertices,
+            .i = &indices,
+            .texture = level_texture,
+        };
+
+        b.drawMesh(mesh, .Texture, self.cam);
+    }
 }

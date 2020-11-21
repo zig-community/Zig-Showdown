@@ -108,6 +108,9 @@ pub fn main() !u8 {
     // - in-memory representation is the file content
     // - make it easily memory-mappable
 
+    // CHANGES IN HERE MUST BE REFLECTED IN
+    // src/client/resources/Model.zig
+
     try stream.writeAll("\x69\x8a\x1f\xf5"); // 0x00: header/identification
     try stream.writeIntLittle(u32, 0x01); // 0x04: version
 

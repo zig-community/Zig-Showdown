@@ -58,6 +58,7 @@ fn addClientPackages(exe: *std.build.LibExeObjStep) void {
     exe.addPackage(pkgs.pixel_draw);
     exe.addPackage(pkgs.zwl);
     exe.addPackage(pkgs.painterz);
+    exe.addPackage(pkgs.zlm);
 }
 
 pub fn build(b: *std.build.Builder) !void {
@@ -170,7 +171,12 @@ pub fn build(b: *std.build.Builder) !void {
             test_client.linkSystemLibrary("m");
         }
 
+        const test_server = b.addTest("src/server/main.zig");
+        test_server.setTarget(target);
+        test_server.setBuildMode(mode);
+
         const test_step = b.step("test", "Runs the test suite for both client and server implementation");
         test_step.dependOn(&test_client.step);
+        test_step.dependOn(&test_server.step);
     }
 }

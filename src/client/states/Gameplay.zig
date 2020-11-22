@@ -80,6 +80,8 @@ pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
 }
 
 pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {
+    errdefer |err| std.debug.print("Error: {}!\n", .{err});
+
     var b = draw.Buffer{
         .width = render_target.width,
         .height = render_target.height,
@@ -101,39 +103,38 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
         Resources.usage.level_render,
     );
 
-    // ugly workaround to draw meshes with pixel_draw:
-    // converts between immutable data and mutable data
+    for (level_model.meshes) |mesh, ind| {
+        const texture_id = try self.resources.textures.getName(mesh.texture()); // this is not optimal, but okayish
+        const texture = try self.resources.textures.get(texture_id, Resources.usage.generic_render);
 
-    const level_texture = try self.resources.textures.get(
-        self.level_texture_id,
-        Resources.usage.generic_render,
-    );
+        // ugly workaround to draw meshes with pixel_draw:
+        // converts between immutable data and mutable data
+        var index: usize = mesh.offset;
+        while (index < mesh.offset + mesh.length) : (index += 3) {
+            var vertices: [3]draw.Vertex = undefined;
+            for (vertices) |*dv, i| {
+                const sv = level_model.vertices[level_model.indices[index + i]];
+                dv.* = draw.Vertex{
+                    .pos = .{
+                        .x = sv.x,
+                        .y = sv.y,
+                        .z = sv.z,
+                    },
+                    .uv = .{
+                        .x = sv.u,
+                        .y = sv.v,
+                    },
+                };
+            }
+            var indices = [3]u32{ 0, 1, 2 };
 
-    var index: usize = 0;
-    while (index < level_model.indices.len) : (index += 3) {
-        var vertices: [3]draw.Vertex = undefined;
-        for (vertices) |*dv, i| {
-            const sv = level_model.vertices[level_model.indices[index + i]];
-            dv.* = draw.Vertex{
-                .pos = .{
-                    .x = sv.x,
-                    .y = sv.y,
-                    .z = sv.z,
-                },
-                .uv = .{
-                    .x = sv.u,
-                    .y = sv.v,
-                },
+            var temp_mesh = draw.Mesh{
+                .v = &vertices,
+                .i = &indices,
+                .texture = texture,
             };
+
+            b.drawMesh(temp_mesh, .Texture, self.cam);
         }
-        var indices = [3]u32{ 0, 1, 2 };
-
-        var mesh = draw.Mesh{
-            .v = &vertices,
-            .i = &indices,
-            .texture = level_texture,
-        };
-
-        b.drawMesh(mesh, .Texture, self.cam);
     }
 }

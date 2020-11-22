@@ -136,22 +136,22 @@ fn callOnState(self: *Self, state: State, comptime fun: []const u8, args: anytyp
     const H = struct {
         fn maybeCall(ptr: anytype, inner_args: anytype) !void {
             const F = @TypeOf(ptr.*);
-            return if (@hasDecl(F, fun))
-                @call(.{}, @field(F, fun), .{ptr} ++ inner_args)
-            else {};
+            if (@hasDecl(F, fun)) {
+                return @call(.{}, @field(F, fun), .{ptr} ++ inner_args);
+            }
         }
     };
-    return switch (state) {
-        .create_server => H.maybeCall(&self.create_server, args),
-        .create_sp_game => H.maybeCall(&self.create_sp_game, args),
-        .credits => H.maybeCall(&self.credits, args),
-        .gameplay => H.maybeCall(&self.gameplay, args),
-        .join_game => H.maybeCall(&self.join_game, args),
-        .main_menu => H.maybeCall(&self.main_menu, args),
-        .options => H.maybeCall(&self.options, args),
-        .pause_menu => H.maybeCall(&self.pause_menu, args),
-        .splash => H.maybeCall(&self.splash, args),
-    };
+    switch (state) {
+        .create_server => return H.maybeCall(&self.create_server, args),
+        .create_sp_game => return H.maybeCall(&self.create_sp_game, args),
+        .credits => return H.maybeCall(&self.credits, args),
+        .gameplay => return H.maybeCall(&self.gameplay, args),
+        .join_game => return H.maybeCall(&self.join_game, args),
+        .main_menu => return H.maybeCall(&self.main_menu, args),
+        .options => return H.maybeCall(&self.options, args),
+        .pause_menu => return H.maybeCall(&self.pause_menu, args),
+        .splash => return H.maybeCall(&self.splash, args),
+    }
 }
 
 pub fn update(self: *Self, delta_time: f32) !void {

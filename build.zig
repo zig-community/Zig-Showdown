@@ -86,6 +86,7 @@ pub fn build(b: *std.build.Builder) !void {
         obj_conv.addPackage(pkgs.args);
         obj_conv.addPackage(pkgs.zlm);
         obj_conv.addPackage(pkgs.wavefront_obj);
+        obj_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
 
         const tools_step = b.step("tools", "Compiles all tools required in the build process");
         tools_step.dependOn(&obj_conv.step);

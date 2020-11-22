@@ -19,15 +19,26 @@ pub fn main() !u8 {
         return 1;
 
     var out_file = try allocator.dupe(u8, cli.positionals[0]);
+    out_file[out_file.len - 4 ..][0..4].* = ".mdl".*;
     defer allocator.free(out_file);
 
-    out_file[out_file.len - 4 ..][0..4].* = ".mdl".*;
+    var mtl_file_name = try allocator.dupe(u8, cli.positionals[0]);
+    mtl_file_name[out_file.len - 4 ..][0..4].* = ".mtl".*;
+    defer allocator.free(mtl_file_name);
 
-    var bsp_file = try std.fs.cwd().openFile(cli.positionals[0], .{});
-    defer bsp_file.close();
+    var obj_file = try std.fs.cwd().openFile(cli.positionals[0], .{});
+    defer obj_file.close();
 
-    var model = try wavefront_obj.load(allocator, bsp_file.inStream());
+    var mtl_file = try std.fs.cwd().openFile(mtl_file_name, .{});
+    defer mtl_file.close();
+
+    var model = try wavefront_obj.load(allocator, obj_file.inStream());
     defer model.deinit();
+
+    var materials = try wavefront_obj.loadMaterials(allocator, mtl_file.inStream());
+    defer materials.deinit();
+
+    // Precompute and optimize model data:
 
     const Vertex = extern struct {
         position: zlm.Vec3,
@@ -52,25 +63,25 @@ pub fn main() !u8 {
     var indices = std.ArrayList(u32).init(allocator);
     defer indices.deinit();
 
-    for (model.faces.items) |face| {
-        if (face.count != 3) {
-            std.debug.warn("Model must be triangulated!\n", .{});
+    for (model.faces) |face| {
+        if (face.vertices.len != 3) {
+            std.log.err("Model must be triangulated!", .{});
             return 1;
         }
 
-        for (face.vertices[0..3]) |src_vtx| {
+        for (face.vertices) |src_vtx| {
             var dst_vertex = Vertex{
-                .position = model.positions.items[src_vtx.position].swizzle("xyz"),
+                .position = model.positions[src_vtx.position].swizzle("xyz"),
                 .normal = undefined,
                 .uv = undefined,
             };
             if (src_vtx.normal) |i| {
-                dst_vertex.normal = model.normals.items[i].normalize();
+                dst_vertex.normal = model.normals[i].normalize();
             } else {
                 dst_vertex.normal = zlm.Vec3.zero;
             }
             if (src_vtx.textureCoordinate) |i| {
-                dst_vertex.uv = model.textureCoordinates.items[i].swizzle("xy");
+                dst_vertex.uv = model.textureCoordinates[i].swizzle("xy");
             } else {
                 dst_vertex.uv = zlm.Vec2.zero;
             }
@@ -97,6 +108,33 @@ pub fn main() !u8 {
         bb_max = zlm.Vec3.componentMax(bb_max, vtx.position);
     }
 
+    for (model.objects) |obj| {
+        if (obj.count == 0)
+            std.debug.print("{}\n", .{obj});
+    }
+
+    // Verify used material data:
+    for (model.objects) |obj| {
+        const mtl_name = obj.material orelse {
+            std.log.err("every object must have a material!", .{});
+            return 1;
+        };
+
+        const mtl = materials.materials.get(mtl_name) orelse {
+            std.log.err("material '{}' not found!", .{mtl_name});
+            return 1;
+        };
+
+        const texture_file = mtl.diffuse_texture orelse {
+            std.log.err("material '{}' has no diffuse texture!", .{mtl_name});
+            return 1;
+        };
+
+        if (texture_file.len < 4) {
+            std.log.err("'{}' is too short for a valid file name!", .{texture_file});
+        }
+    }
+
     // Write out the final object
 
     var mdl_file = try std.fs.cwd().createFile(out_file, .{});
@@ -116,7 +154,7 @@ pub fn main() !u8 {
 
     try stream.writeIntLittle(u32, @intCast(u32, vertices.items.len)); // 0x08: vertex count
     try stream.writeIntLittle(u32, @intCast(u32, indices.items.len / 3)); // 0x0C: face count
-    try stream.writeIntLittle(u32, @intCast(u32, model.objects.items.len)); // 0x10: object count
+    try stream.writeIntLittle(u32, @intCast(u32, model.objects.len)); // 0x10: object count
 
     try stream.writeIntLittle(u32, @bitCast(u32, bb_min.x)); // +0x14
     try stream.writeIntLittle(u32, @bitCast(u32, bb_min.y)); // +0x18
@@ -152,18 +190,22 @@ pub fn main() !u8 {
     }
 
     // first object at 0x30 + 0x20 * vertex_count + 0x04 * index_coun
-    for (model.objects.items) |obj| {
+    for (model.objects) |obj| {
         try stream.writeIntLittle(u32, @intCast(u32, obj.start)); // +0x00
         try stream.writeIntLittle(u32, @intCast(u32, obj.count)); // +0x04
 
-        const mtl = obj.material orelse "";
+        // we checked all of the .? already further above
+        const mtl = materials.materials.get(obj.material.?).?;
+        const texture = mtl.diffuse_texture.?;
 
-        const name_length = 120; // pad to 0x80 byte length
-        const length = std.math.min(mtl.len, name_length);
-        const padding = name_length - length;
+        var buffer = [1]u8{0} ** 120;
 
-        try stream.writeAll(mtl[0..length]); // 0x08 … 0x80
-        try stream.writeByteNTimes(0x00, padding);
+        _ = try std.fmt.bufPrint(&buffer, "/{}/{}.tex", .{
+            std.fs.path.dirname(cli.positionals[0]),
+            texture[0 .. texture.len - 4],
+        });
+
+        try stream.writeAll(&buffer); // 0x08 … 0x80
     }
 
     return 0;

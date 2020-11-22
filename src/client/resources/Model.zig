@@ -33,20 +33,27 @@ comptime {
     std.debug.assert(@sizeOf(Vertex) == 0x20);
 }
 
-pub const Object = extern struct {
+/// A mesh is a portion of the models faces that
+/// is associated with a texture and
+/// some material properties.
+pub const Mesh = extern struct {
     offset: u32,
     length: u32,
     texture_buf: [120]u8,
 
-    fn texture(self: *const @This()) []const u8 {
-        return std.mem.span(self.texture_buf);
+    pub fn texture(self: *const @This()) []const u8 {
+        return if (std.mem.indexOf(u8, &self.texture_buf, "\x00")) |idx|
+            self.texture_buf[0..idx]
+        else
+            &self.texture_buf;
     }
 };
+
 comptime {
-    std.debug.assert(@byteOffsetOf(Object, "offset") == 0x00);
-    std.debug.assert(@byteOffsetOf(Object, "length") == 0x04);
-    std.debug.assert(@byteOffsetOf(Object, "texture_buf") == 0x08);
-    std.debug.assert(@sizeOf(Object) == 0x80);
+    std.debug.assert(@byteOffsetOf(Mesh, "offset") == 0x00);
+    std.debug.assert(@byteOffsetOf(Mesh, "length") == 0x04);
+    std.debug.assert(@byteOffsetOf(Mesh, "texture_buf") == 0x08);
+    std.debug.assert(@sizeOf(Mesh) == 0x80);
 }
 
 arena: std.heap.ArenaAllocator,
@@ -56,7 +63,7 @@ bbox_max: zlm.Vec3,
 
 vertices: []const Vertex,
 indices: []const Index,
-objects: []const Object,
+meshes: []const Mesh,
 
 pub fn deinit(allocator: *std.mem.Allocator, self: *Self) void {
     self.arena.deinit();
@@ -81,7 +88,7 @@ pub fn loadFromMemory(allocator: *std.mem.Allocator, raw_data: []const u8, hint:
 
         .vertices = undefined,
         .indices = undefined,
-        .objects = undefined,
+        .meshes = undefined,
     };
     errdefer map.arena.deinit();
 
@@ -113,9 +120,9 @@ pub fn loadFromMemory(allocator: *std.mem.Allocator, raw_data: []const u8, hint:
         Index,
         @alignCast(@alignOf(Index), data[@sizeOf(Vertex) * vertex_count ..][0 .. @sizeOf(Index) * index_count]),
     );
-    map.objects = std.mem.bytesAsSlice(
-        Object,
-        @alignCast(@alignOf(Object), data[@sizeOf(Vertex) * vertex_count + @sizeOf(Index) * index_count ..][0 .. @sizeOf(Object) * object_count]),
+    map.meshes = std.mem.bytesAsSlice(
+        Mesh,
+        @alignCast(@alignOf(Mesh), data[@sizeOf(Vertex) * vertex_count + @sizeOf(Index) * index_count ..][0 .. @sizeOf(Mesh) * object_count]),
     );
 
     // Swap endianess on big-endian platforms
@@ -130,9 +137,9 @@ pub fn loadFromMemory(allocator: *std.mem.Allocator, raw_data: []const u8, hint:
         for (map.indices) |*i| {
             i.* = @byteSwap(Index, i.*);
         }
-        for (map.objects) |*o| {
-            o.offset = @byteSwap(u32, o.offset);
-            o.length = @byteSwap(u32, o.length);
+        for (map.meshes) |*m| {
+            m.offset = @byteSwap(u32, m.offset);
+            m.length = @byteSwap(u32, m.length);
         }
     }
 

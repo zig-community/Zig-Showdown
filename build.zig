@@ -88,8 +88,16 @@ pub fn build(b: *std.build.Builder) !void {
         obj_conv.addPackage(pkgs.wavefront_obj);
         obj_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
 
+        const tex_conv = b.addExecutable("tex-conv", "src/tools/tex-conv.zig");
+        tex_conv.addCSourceFile("src/tools/stb_image.c", &[_][]const u8{});
+        tex_conv.addIncludeDir("deps/stb");
+        tex_conv.addPackage(pkgs.args);
+        tex_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
+        tex_conv.linkLibC();
+
         const tools_step = b.step("tools", "Compiles all tools required in the build process");
         tools_step.dependOn(&obj_conv.step);
+        tools_step.dependOn(&tex_conv.step);
 
         const assets_step = b.step("assets", "Compiles all assets to their final format");
 
@@ -101,6 +109,10 @@ pub fn build(b: *std.build.Builder) !void {
             while (try walker.next()) |entry| {
                 if (std.mem.endsWith(u8, entry.path, ".obj")) {
                     const convert_file = obj_conv.run();
+                    convert_file.addArg(entry.path);
+                    assets_step.dependOn(&convert_file.step);
+                } else if (std.mem.endsWith(u8, entry.path, ".png") or std.mem.endsWith(u8, entry.path, ".tga") or std.mem.endsWith(u8, entry.path, ".bmp")) {
+                    const convert_file = tex_conv.run();
                     convert_file.addArg(entry.path);
                     assets_step.dependOn(&convert_file.step);
                 }

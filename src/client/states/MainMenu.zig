@@ -66,11 +66,11 @@ current_background: usize = 0,
 pub fn init(resources: *Resources) !Self {
     return Self{
         .resources = resources,
-        .items_font_id = try resources.textures.getName("/assets/font.tga"),
+        .items_font_id = try resources.textures.getName("/assets/font.tex"),
         .background_ids = [3]Resources.TexturePool.ResourceName{
-            try resources.textures.getName("/assets/backgrounds/matte-01.tga"),
-            try resources.textures.getName("/assets/backgrounds/matte-02.tga"),
-            try resources.textures.getName("/assets/backgrounds/matte-03.tga"),
+            try resources.textures.getName("/assets/backgrounds/matte-01.tex"),
+            try resources.textures.getName("/assets/backgrounds/matte-02.tex"),
+            try resources.textures.getName("/assets/backgrounds/matte-03.tex"),
         },
     };
 }
@@ -104,7 +104,7 @@ fn fetchFontPixel(font: Resources.TexturePool.Resource, ix: isize, iy: isize) zw
     const y = std.math.cast(usize, iy) catch return theme.zig_yellow;
     if (x >= font.width or y >= font.height) return theme.zig_yellow;
 
-    return if (font.raw[4 * (font.width * y + x) + 3] >= 0x80)
+    return if (font.pixels[font.width * y + x].a >= 0x80)
         theme.zig_bright
     else
         theme.zig_yellow;
@@ -116,10 +116,10 @@ fn fetchImagePixel(font: Resources.TexturePool.Resource, ix: isize, iy: isize) z
     if (x >= font.width or y >= font.height) return theme.zig_yellow;
 
     return zwl.Pixel{
-        .r = font.raw[4 * (font.width * y + x) + 0],
-        .g = font.raw[4 * (font.width * y + x) + 1],
-        .b = font.raw[4 * (font.width * y + x) + 2],
-        .a = font.raw[4 * (font.width * y + x) + 3],
+        .r = font.pixels[font.width * y + x].r,
+        .g = font.pixels[font.width * y + x].g,
+        .b = font.pixels[font.width * y + x].b,
+        .a = font.pixels[font.width * y + x].a,
     };
 }
 
@@ -165,8 +165,8 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
             canvas.copyRectangle(
                 @intCast(isize, glyph_w * i) + pad,
                 top + pad,
-                glyph_w * (c % 16),
-                glyph_h * (c / 16),
+                @intCast(isize, glyph_w * (c % 16)),
+                @intCast(isize, glyph_h * (c / 16)),
                 glyph_w,
                 glyph_h,
                 font,

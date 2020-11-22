@@ -18,7 +18,6 @@ resources: *Resources,
 
 z_buffer: []f32,
 
-level_texture_id: Resources.TexturePool.ResourceName,
 level_model_id: Resources.ModelPool.ResourceName,
 
 cam: draw.Camera3D = .{
@@ -36,14 +35,12 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
 
         .z_buffer = undefined,
 
-        .level_texture_id = undefined,
         .level_model_id = undefined,
     };
 
     self.z_buffer = try allocator.alloc(f32, 0);
     errdefer allocator.free(self.z_buffer);
 
-    self.level_texture_id = try resources.textures.getName("/assets/bad_floor.tga");
     self.level_model_id = try self.resources.models.getName("/assets/maps/demo.mdl");
 
     return self;
@@ -80,8 +77,6 @@ pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
 }
 
 pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {
-    errdefer |err| std.debug.print("Error: {}!\n", .{err});
-
     var b = draw.Buffer{
         .width = render_target.width,
         .height = render_target.height,
@@ -109,8 +104,8 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
 
         // ugly workaround to draw meshes with pixel_draw:
         // converts between immutable data and mutable data
-        var index: usize = mesh.offset;
-        while (index < mesh.offset + mesh.length) : (index += 3) {
+        var index: usize = 3 * mesh.offset;
+        while (index < 3 * (mesh.offset + mesh.length)) : (index += 3) {
             var vertices: [3]draw.Vertex = undefined;
             for (vertices) |*dv, i| {
                 const sv = level_model.vertices[level_model.indices[index + i]];
@@ -131,7 +126,7 @@ pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delt
             var temp_mesh = draw.Mesh{
                 .v = &vertices,
                 .i = &indices,
-                .texture = texture,
+                .texture = texture.toPixelDraw(),
             };
 
             b.drawMesh(temp_mesh, .Texture, self.cam);

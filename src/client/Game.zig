@@ -96,7 +96,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .transition_buffer_from = undefined,
         .transition_buffer_to = undefined,
 
-        .font_id = try resources.textures.getName("/assets/font.tga"),
+        .font_id = try resources.textures.getName("/assets/font.tex"),
     };
 
     game.main_menu = try states.MainMenu.init(resources);
@@ -257,7 +257,7 @@ pub fn render(self: *Self, target: zwl.PixelBuffer, delta_time: f32) !void {
         };
 
         const font = draw.BitmapFont{
-            .texture = try self.resources.textures.get(self.font_id, Resources.usage.debug_draw),
+            .texture = (try self.resources.textures.get(self.font_id, Resources.usage.debug_draw)).toPixelDraw(),
             .font_size_x = 12,
             .font_size_y = 16,
             .character_spacing = 11,

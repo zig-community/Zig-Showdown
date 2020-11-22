@@ -73,7 +73,10 @@ pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
     // camera_delta_p = Vec3_mul_F(camera_delta_p, delta * 3);
 
     // cam.pos = Vec3_add(camera_delta_p, cam.pos);
-    self.cam.rotation.y += delta_time;
+    self.cam.rotation.y += 0.1 * delta_time;
+    self.cam.pos.z -= 0.5 * delta_time;
+    if (self.cam.pos.z <= -7.0)
+        self.cam.pos.z += 14.0;
 }
 
 pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {

@@ -14,6 +14,7 @@ const Implementation = switch (build_options.render_backend) {
 
 pub const Color = @import("renderer/Color.zig");
 pub const ScenePass = @import("renderer/ScenePass.zig");
+pub const UiPass = @import("renderer/UiPass.zig");
 pub const RenderTarget = @import("renderer/RenderTarget.zig");
 
 pub const Size = struct {
@@ -22,12 +23,14 @@ pub const Size = struct {
 };
 
 allocator: *std.mem.Allocator,
+window: *WindowPlatform.Window,
 implementation: Implementation,
 
 /// Initializes a new rendering backend instance for the given window.
 pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
     return Self{
         .allocator = allocator,
+        .window = window,
         .implementation = try Implementation.init(allocator, window),
     };
 }
@@ -36,6 +39,15 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
 pub fn deinit(self: *Self) void {
     self.implementation.deinit();
     self.* = undefined;
+}
+
+/// Returns the size of the screen.
+pub fn screenSize(self: Self) Size {
+    const size = self.window.getSize();
+    return Size{
+        .width = size[0],
+        .height = size[1],
+    };
 }
 
 /// Starts to render a new frame. This is meant as a notification
@@ -49,6 +61,16 @@ pub fn beginFrame(self: *Self) !void {
 /// Clears the given RenderTarget to the color.
 pub fn clear(self: *Self, rt: RenderTarget, color: Color) void {
     return self.implementation.clear(rt, color);
+}
+
+pub fn submit(self: *Self, render_target: RenderTarget, pass: anytype) !void {
+    const T = @TypeOf(pass);
+    switch (T) {
+        UiPass => try self.implementation.submitUiPass(render_target, pass),
+        ScenePass => try self.implementation.submitScenePass(render_target, pass),
+
+        else => @compileError("Renderer.submit can not process " ++ @typeName(T) ++ "!"),
+    }
 }
 
 /// Finishes the frame and pushes the resulting image to the screen.

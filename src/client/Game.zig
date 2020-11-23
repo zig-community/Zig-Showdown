@@ -99,7 +99,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .main_menu = undefined,
         .options = .{},
         .pause_menu = .{},
-        .splash = states.Splash.init(),
+        .splash = states.Splash.init(allocator),
 
         .font_id = try resources.textures.getName("/assets/font.tex"),
     };

@@ -4,9 +4,12 @@ const Resources = @import("../Resources.zig");
 
 const Self = @This();
 
+const Transform = @import("zlm").Mat4;
+
 const DrawCall = union(enum) {
     model: struct {
-        model: Resources.Model, transform: Transform
+        model: Resources.Model,
+        transform: Transform,
     },
 };
 
@@ -22,4 +25,3 @@ pub fn deinit(self: *Self) void {
     self.drawcalls.deinit();
     self.* = undefined;
 }
-

@@ -52,6 +52,20 @@ const State = enum {
     splash,
 };
 
+const RenderBackend = enum {
+    /// basic software rendering
+    software,
+
+    /// high-performance desktop rendering
+    vulkan,
+
+    /// basic rendering backend for mobile devices and embedded stuff like Raspberry PI
+    opengl_es,
+
+    /// raytracing backend planned by Snektron
+    vulkan_rt,
+};
+
 fn addClientPackages(exe: *std.build.LibExeObjStep) void {
     exe.addPackage(pkgs.network);
     exe.addPackage(pkgs.args);
@@ -80,6 +94,11 @@ pub fn build(b: *std.build.Builder) !void {
         "enable-fps-counter",
         "Enables the FPS counter as an overlay.",
     ) orelse (mode == .Debug);
+    const render_backend = b.option(
+        RenderBackend,
+        "renderer",
+        "Selects the rendering backend which the game should use to render",
+    ) orelse .software;
 
     {
         const obj_conv = b.addExecutable("obj-conv", "src/tools/obj-conv.zig");
@@ -127,6 +146,7 @@ pub fn build(b: *std.build.Builder) !void {
         client.addBuildOption(State, "initial_state", initial_state);
         client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
         client.addBuildOption(u16, "default_port", default_port);
+        client.addBuildOption(RenderBackend, "render_backend", render_backend);
 
         client.setTarget(target);
         client.setBuildMode(mode);

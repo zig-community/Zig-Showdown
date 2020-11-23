@@ -1,6 +1,7 @@
 const std = @import("std");
 const draw = @import("pixel_draw");
 
+const renderer = @import("root").renderer;
 const resource_pool = @import("../resource_pool.zig");
 
 const Self = @This();
@@ -16,6 +17,8 @@ width: usize,
 height: usize,
 pixels: []Pixel,
 
+renderer_detail: renderer.Texture,
+
 pub fn toPixelDraw(self: Self) draw.Texture {
     return draw.Texture{
         .width = @intCast(u32, self.width),
@@ -25,6 +28,7 @@ pub fn toPixelDraw(self: Self) draw.Texture {
 }
 
 pub fn deinit(allocator: *std.mem.Allocator, self: *Self) void {
+    renderer.destroyTexture(&self.renderer_detail);
     allocator.free(self.pixels);
     self.* = undefined;
 }
@@ -42,9 +46,12 @@ pub fn loadFromMemory(allocator: *std.mem.Allocator, raw_data: []const u8, hint:
     const pixels = try allocator.dupe(Pixel, std.mem.bytesAsSlice(Pixel, raw_data[16..]));
     errdefer allocator.free(pixels);
 
-    return Self{
+    var tex = Self{
         .width = std.mem.readIntLittle(u16, raw_data[8..10]),
         .height = std.mem.readIntLittle(u16, raw_data[10..12]),
         .pixels = pixels,
+        .renderer_detail = undefined,
     };
+    tex.renderer_detail = try renderer.createTexture(&tex);
+    return tex;
 }

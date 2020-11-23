@@ -2,6 +2,7 @@ const std = @import("std");
 const network = @import("network");
 const args = @import("args");
 const zwl = @import("zwl");
+const build_options = @import("build_options");
 
 const Game = @import("Game.zig");
 
@@ -20,6 +21,11 @@ pub const WindowPlatform = zwl.Platform(.{
     .render_software = true,
     .x11_use_xcb = false,
 });
+
+pub const renderer = switch (build_options.render_backend) {
+    .software => @import("renderer/software.zig"),
+    else => @compileError("The render backend " ++ @tagName(build_options.render_backend) ++ " is not implemented yet!"),
+};
 
 pub fn main() anyerror!u8 {
     defer _ = gpa.deinit();

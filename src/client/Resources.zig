@@ -1,8 +1,8 @@
 const std = @import("std");
 const res = @import("resource_pool.zig");
 
-const Model = @import("resources/Model.zig");
-const Texture = @import("resources/Texture.zig");
+pub const Model = @import("resources/Model.zig");
+pub const Texture = @import("resources/Texture.zig");
 
 const Self = @This();
 

@@ -52,8 +52,9 @@ pub fn main() anyerror!u8 {
         .width = 1280,
         .height = 720,
         .resizeable = false,
-        .track_damage = true,
+        .track_damage = false,
         .visible = true,
+        .decorations = true,
     });
     defer window.deinit();
 
@@ -62,35 +63,55 @@ pub fn main() anyerror!u8 {
 
     var game = try Game.init(global_allocator, &resources);
     defer game.deinit();
-    //main_loop: while (true) {
-    // const event = try platform.waitForEvent();
 
-    // switch (event) {
-    //     .WindowResized => |win| {
-    //         const size = win.getSize();
-    //         std.log.debug("*notices size {}x{}* OwO what's this", .{ size[0], size[1] });
-    //     },
+    var update_timer = try std.time.Timer.start();
+    var render_timer = try std.time.Timer.start();
 
-    //     // someone closed the window, just stop the game:
-    //     .WindowDestroyed, .ApplicationTerminated => break :main_loop,
+    // kick-off vblank events:
+    try render(&game, window, 0.0);
 
-    //     .WindowDamaged => |damage| {
-    //         std.log.debug("Taking damage: {}x{} @ {}x{}", .{ damage.w, damage.h, damage.x, damage.y });
-    //     },
-    // }
+    main_loop: while (true) {
+        {
+            const update_delta = @intToFloat(f32, update_timer.lap()) / std.time.ns_per_s;
+            try game.update(update_delta);
+        }
 
-    var timer = try std.time.Timer.start();
-    while (true) {
-        const delta = @intToFloat(f32, timer.lap()) / std.time.ns_per_s;
+        const event = try platform.waitForEvent();
 
-        try game.update(delta);
+        switch (event) {
+            .WindowResized => |win| {
+                const size = win.getSize();
+                std.log.debug("*notices size {}x{}* OwO what's this", .{ size[0], size[1] });
+            },
 
-        const pixbuf = try window.mapPixels();
-        try game.render(pixbuf, delta);
-        try window.submitPixels();
+            // someone closed the window, just stop the game:
+            .WindowDestroyed, .ApplicationTerminated => break :main_loop,
+
+            .WindowVBlank => {
+                const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
+                try render(&game, window, render_delta);
+            },
+
+            .WindowDamaged => {}, // ignore this
+        }
     }
 
     return 0;
+}
+
+fn render(game: *Game, window: *WindowPlatform.Window, render_delta: f32) !void {
+    const pixbuf = try window.mapPixels();
+
+    try game.render(pixbuf, render_delta);
+
+    try window.submitPixels(&[_]zwl.UpdateArea{
+        zwl.UpdateArea{
+            .x = 0,
+            .y = 0,
+            .w = pixbuf.width,
+            .h = pixbuf.height,
+        },
+    });
 }
 
 const CliArgs = struct {

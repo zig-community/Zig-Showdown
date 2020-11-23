@@ -17,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: "recursive"
 
       - name: Setup Zig
         uses: goto-bus-stop/setup-zig@v1
@@ -24,17 +26,13 @@ jobs:
           version: master
 
       - name: Run test suite
-        run: |
-          zig build test
+        run: zig build test
 
       - name: Compile game binaries
-        run: |
-          zig build install
+        run: zig build install
 
       - name: Compile tool binaries
-        run: |
-          zig build tools
+        run: zig build tools
 
       - name: Compile game assets
-        run: |
-          zig build assets
+        run: zig build assets

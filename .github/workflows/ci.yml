@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 5 * * *" # run at 5 AM UTC
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: ["ubuntu-latest", "windows-latest", "macos-latest"]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
+
+      - name: Run test suite
+        run: |
+          zig build test
+
+      - name: Compile game binaries
+        run: |
+          zig build install
+
+      - name: Compile tool binaries
+        run: |
+          zig build tools
+
+      - name: Compile game assets
+        run: |
+          zig build assets

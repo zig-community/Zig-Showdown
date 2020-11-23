@@ -3,7 +3,7 @@
 //! The player can chose what to do here.
 
 const std = @import("std");
-const zwl = @import("zwl");
+const Renderer = @import("root").Renderer;
 const painterz = @import("painterz");
 const theme = @import("../theme.zig");
 const math = @import("../math.zig");
@@ -12,13 +12,13 @@ const Resources = @import("../Resources.zig");
 
 const Self = @This();
 
-const Canvas = painterz.Canvas(zwl.PixelBuffer, zwl.Pixel, struct {
-    fn setPixel(buf: zwl.PixelBuffer, x: isize, y: isize, col: zwl.Pixel) void {
-        if (x < 0 or y < 0 or x >= buf.width or y >= buf.height)
-            return;
-        buf.setPixel(@intCast(u16, x), @intCast(u16, y), col);
-    }
-}.setPixel);
+// const Canvas = painterz.Canvas(zwl.PixelBuffer, zwl.Pixel, struct {
+//     fn setPixel(buf: zwl.PixelBuffer, x: isize, y: isize, col: zwl.Pixel) void {
+//         if (x < 0 or y < 0 or x >= buf.width or y >= buf.height)
+//             return;
+//         buf.setPixel(@intCast(u16, x), @intCast(u16, y), col);
+//     }
+// }.setPixel);
 
 const MenuItem = struct {
     const extension_time = 0.3;
@@ -128,62 +128,64 @@ fn fetchImagePixel(font: Resources.TexturePool.Resource, ix: isize, iy: isize) z
     };
 }
 
-pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {
-    var canvas = Canvas.init(render_target);
+pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTarget, total_time: f32, delta_time: f32) !void {
+    renderer.clear(render_target, theme.zig_dark);
 
-    const font = try self.resources.textures.get(self.items_font_id, Resources.usage.menu_render);
-    const background = try self.resources.textures.get(self.background_ids[self.current_background], Resources.usage.menu_render);
-    canvas.copyRectangle(
-        0,
-        0,
-        0,
-        0,
-        render_target.width,
-        render_target.height,
-        background,
-        fetchImagePixel,
-    );
+    // var canvas = Canvas.init(render_target);
 
-    const glyph_w = font.width / 16;
-    const glyph_h = font.height / 16;
+    // const font = try self.resources.textures.get(self.items_font_id, Resources.usage.menu_render);
+    // const background = try self.resources.textures.get(self.background_ids[self.current_background], Resources.usage.menu_render);
+    // canvas.copyRectangle(
+    //     0,
+    //     0,
+    //     0,
+    //     0,
+    //     render_target.width,
+    //     render_target.height,
+    //     background,
+    //     fetchImagePixel,
+    // );
 
-    for (self.items) |*item, index| {
-        const top = @intCast(isize, render_target.height - self.items.len * 50 + 40 * index);
+    // const glyph_w = font.width / 16;
+    // const glyph_h = font.height / 16;
 
-        const height = 30;
-        const default_width = 250;
+    // for (self.items) |*item, index| {
+    //     const top = @intCast(isize, render_target.height - self.items.len * 50 + 40 * index);
 
-        const top_width = default_width + @floatToInt(isize, 50 * math.smoothstep(item.extension));
-        const bot_width = default_width + @floatToInt(isize, 30 * math.smoothstep(item.extension));
+    //     const height = 30;
+    //     const default_width = 250;
 
-        const poly = [_]painterz.Point{
-            .{ .x = 0, .y = 0 },
-            .{ .x = top_width, .y = 0 },
-            .{ .x = bot_width, .y = height },
-            .{ .x = 0, .y = height },
-        };
+    //     const top_width = default_width + @floatToInt(isize, 50 * math.smoothstep(item.extension));
+    //     const bot_width = default_width + @floatToInt(isize, 30 * math.smoothstep(item.extension));
 
-        canvas.fillPolygon(0, top, theme.zig_yellow, &poly);
+    //     const poly = [_]painterz.Point{
+    //         .{ .x = 0, .y = 0 },
+    //         .{ .x = top_width, .y = 0 },
+    //         .{ .x = bot_width, .y = height },
+    //         .{ .x = 0, .y = height },
+    //     };
 
-        const pad = @intCast(isize, (height - glyph_h) / 2);
-        for (item.title) |c, i| {
-            canvas.copyRectangle(
-                @intCast(isize, glyph_w * i) + pad,
-                top + pad,
-                @intCast(isize, glyph_w * (c % 16)),
-                @intCast(isize, glyph_h * (c / 16)),
-                glyph_w,
-                glyph_h,
-                font,
-                fetchFontPixel,
-            );
-        }
+    //     canvas.fillPolygon(0, top, theme.zig_yellow, &poly);
 
-        const extended = (index == self.current_item);
-        item.extension = std.math.clamp(
-            if (extended) item.extension + delta_time / MenuItem.extension_time else item.extension - delta_time / MenuItem.extension_time,
-            0.0,
-            1.0,
-        );
-    }
+    //     const pad = @intCast(isize, (height - glyph_h) / 2);
+    //     for (item.title) |c, i| {
+    //         canvas.copyRectangle(
+    //             @intCast(isize, glyph_w * i) + pad,
+    //             top + pad,
+    //             @intCast(isize, glyph_w * (c % 16)),
+    //             @intCast(isize, glyph_h * (c / 16)),
+    //             glyph_w,
+    //             glyph_h,
+    //             font,
+    //             fetchFontPixel,
+    //         );
+    //     }
+
+    //     const extended = (index == self.current_item);
+    //     item.extension = std.math.clamp(
+    //         if (extended) item.extension + delta_time / MenuItem.extension_time else item.extension - delta_time / MenuItem.extension_time,
+    //         0.0,
+    //         1.0,
+    //     );
+    // }
 }

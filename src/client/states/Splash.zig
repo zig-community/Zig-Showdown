@@ -2,7 +2,7 @@
 //! Zig logo splash, possibly with zero flying through the screen
 
 const std = @import("std");
-const zwl = @import("zwl");
+const Renderer = @import("root").Renderer;
 const painterz = @import("painterz");
 const math = @import("../math.zig");
 const theme = @import("../theme.zig");
@@ -42,40 +42,40 @@ pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
     }
 }
 
-pub fn render(self: *Self, render_target: zwl.PixelBuffer, total_time: f32, delta_time: f32) !void {
-    std.mem.set(u32, render_target.span(), @bitCast(u32, theme.zig_dark));
+pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTarget, total_time: f32, delta_time: f32) !void {
+    renderer.clear(render_target, theme.zig_dark);
 
-    var canvas = Canvas.init(render_target);
+    // var canvas = Canvas.init(render_target);
 
-    const mid_x: isize = render_target.width / 2;
-    const mid_y: isize = render_target.height / 2;
+    // const mid_x: isize = render_target.width / 2;
+    // const mid_y: isize = render_target.height / 2;
 
-    const progress = std.math.clamp(self.progress, 0.0, 1.0);
-    self.progress += delta_time / self.duration;
+    // const progress = std.math.clamp(self.progress, 0.0, 1.0);
+    // self.progress += delta_time / self.duration;
 
-    const line_length = @floatToInt(isize, 100 * math.smoothstep(progress));
+    // const line_length = @floatToInt(isize, 100 * math.smoothstep(progress));
 
-    canvas.drawLine(
-        mid_x - 50,
-        mid_y - 50,
-        mid_x - 50 + line_length,
-        mid_y - 50,
-        theme.zig_yellow,
-    );
+    // canvas.drawLine(
+    //     mid_x - 50,
+    //     mid_y - 50,
+    //     mid_x - 50 + line_length,
+    //     mid_y - 50,
+    //     theme.zig_yellow,
+    // );
 
-    canvas.drawLine(
-        mid_x + 50,
-        mid_y - 50,
-        mid_x + 50 - line_length,
-        mid_y - 50 + line_length,
-        theme.zig_yellow,
-    );
+    // canvas.drawLine(
+    //     mid_x + 50,
+    //     mid_y - 50,
+    //     mid_x + 50 - line_length,
+    //     mid_y - 50 + line_length,
+    //     theme.zig_yellow,
+    // );
 
-    canvas.drawLine(
-        mid_x + 50 - line_length,
-        mid_y + 50,
-        mid_x + 50,
-        mid_y + 50,
-        theme.zig_yellow,
-    );
+    // canvas.drawLine(
+    //     mid_x + 50 - line_length,
+    //     mid_y + 50,
+    //     mid_x + 50,
+    //     mid_y + 50,
+    //     theme.zig_yellow,
+    // );
 }

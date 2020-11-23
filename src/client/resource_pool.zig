@@ -49,8 +49,9 @@ pub const Mask = u64;
 /// Resources will be freed afterwards when necessary.
 pub fn ResourcePool(
     comptime T: type,
-    loadFn: fn (allocator: *std.mem.Allocator, buffer: []const u8, extension_hint: []const u8) Error!T,
-    freeFn: fn (allocator: *std.mem.Allocator, self: *T) void,
+    comptime Context: type,
+    loadFn: fn (ctx: Context, allocator: *std.mem.Allocator, buffer: []const u8, extension_hint: []const u8) Error!T,
+    freeFn: fn (ctx: Context, allocator: *std.mem.Allocator, self: *T) void,
 ) type {
     return struct {
         const Self = @This();
@@ -84,6 +85,7 @@ pub fn ResourcePool(
         }
 
         allocator: *std.mem.Allocator,
+        context: Context,
 
         /// Arena allocator that stores strings used in the resource manager
         string_arena: std.heap.ArenaAllocator,
@@ -97,9 +99,11 @@ pub fn ResourcePool(
 
         resources: ManagedResourceMap,
 
-        pub fn init(allocator: *std.mem.Allocator) Self {
+        pub fn init(allocator: *std.mem.Allocator, context: Context) Self {
             return Self{
                 .allocator = allocator,
+                .context = context,
+
                 .string_arena = std.heap.ArenaAllocator.init(allocator),
                 .resource_names = std.StringHashMapUnmanaged(ResourceName){},
                 .resources = ManagedResourceMap{},
@@ -108,7 +112,7 @@ pub fn ResourcePool(
 
         pub fn deinit(self: *Self) void {
             for (self.resources.items()) |*item| {
-                freeFn(self.allocator, &item.value.resource);
+                freeFn(self.context, self.allocator, &item.value.resource);
             }
 
             self.resource_names.deinit(self.allocator);
@@ -147,7 +151,7 @@ pub fn ResourcePool(
                 if (items[i].value.usage == 0) {
                     // delete all unused resources
                     var old_entry = self.resources.remove(items[i].key) orelse unreachable;
-                    freeFn(self.allocator, &old_entry.value.resource);
+                    freeFn(self.context, self.allocator, &old_entry.value.resource);
                     len -= 1; // swapRemove keeps the next item at `i`, but reduces length
                 } else {
                     // keep iterating
@@ -192,6 +196,7 @@ pub fn ResourcePool(
                 gopr.entry.value = ManagedResource{
                     .usage = 0,
                     .resource = try loadFn(
+                        self.context,
                         self.allocator,
                         buffer,
                         filePathExtension(file_name),

@@ -2,7 +2,6 @@ const std = @import("std");
 const network = @import("network");
 const args = @import("args");
 const zwl = @import("zwl");
-const build_options = @import("build_options");
 
 const Game = @import("Game.zig");
 
@@ -22,10 +21,9 @@ pub const WindowPlatform = zwl.Platform(.{
     .x11_use_xcb = false,
 });
 
-pub const renderer = switch (build_options.render_backend) {
-    .software => @import("renderer/software.zig"),
-    else => @compileError("The render backend " ++ @tagName(build_options.render_backend) ++ " is not implemented yet!"),
-};
+/// This is a type that abstracts rendering tasks into
+/// a platform-independent matter
+pub const Renderer =@import("Renderer.zig");
 
 pub fn main() anyerror!u8 {
     defer _ = gpa.deinit();
@@ -64,7 +62,10 @@ pub fn main() anyerror!u8 {
     });
     defer window.deinit();
 
-    var resources = Resources.init(global_allocator);
+    var renderer = try Renderer.init(global_allocator, window);
+    defer renderer.deinit();
+
+    var resources = Resources.init(global_allocator, &renderer);
     defer resources.deinit();
 
     var game = try Game.init(global_allocator, &resources);
@@ -72,9 +73,6 @@ pub fn main() anyerror!u8 {
 
     var update_timer = try std.time.Timer.start();
     var render_timer = try std.time.Timer.start();
-
-    // kick-off vblank events:
-    try render(&game, window, 0.0);
 
     const stretch_factor = 1.0 / cli.options.@"time-stretch";
 
@@ -96,8 +94,13 @@ pub fn main() anyerror!u8 {
             .WindowDestroyed, .ApplicationTerminated => break :main_loop,
 
             .WindowVBlank => {
+                try renderer.beginFrame();
+
                 const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
-                try render(&game, window, stretch_factor * render_delta);
+
+                try game.render(&renderer, stretch_factor * render_delta);
+
+                try renderer.endFrame();
             },
 
             .WindowDamaged => {}, // ignore this
@@ -105,21 +108,6 @@ pub fn main() anyerror!u8 {
     }
 
     return 0;
-}
-
-fn render(game: *Game, window: *WindowPlatform.Window, render_delta: f32) !void {
-    const pixbuf = try window.mapPixels();
-
-    try game.render(pixbuf, render_delta);
-
-    try window.submitPixels(&[_]zwl.UpdateArea{
-        zwl.UpdateArea{
-            .x = 0,
-            .y = 0,
-            .w = pixbuf.width,
-            .h = pixbuf.height,
-        },
-    });
 }
 
 const CliArgs = struct {

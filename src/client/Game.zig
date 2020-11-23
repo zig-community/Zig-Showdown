@@ -6,19 +6,30 @@ const draw = @import("pixel_draw");
 
 const Self = @This();
 const Resources = @import("Resources.zig");
-const WindowPlatform = @import("root").WindowPlatform;
+const Renderer = @import("root").Renderer;
 
 ///! The core management structure for the game. This is
 ///! mostly platform independent game logic and rendering implementation.
 const states = struct {
+    // pub const CreateServer = @import("states/CreateServer.zig");
+    // pub const CreateSpGame = @import("states/CreateSpGame.zig");
+    // pub const Credits = @import("states/Credits.zig");
+    // pub const Gameplay = @import("states/Gameplay.zig");
+    // pub const JoinGame = @import("states/JoinGame.zig");
+    // pub const MainMenu = @import("states/MainMenu.zig");
+    // pub const Options = @import("states/Options.zig");
+    // pub const PauseMenu = @import("states/PauseMenu.zig");
+    // pub const Splash = @import("states/Splash.zig");
+
+    // TODO: REVERT THIS WHEN RENDERING API IS DECIDED!
     pub const CreateServer = @import("states/CreateServer.zig");
-    pub const CreateSpGame = @import("states/CreateSpGame.zig");
-    pub const Credits = @import("states/Credits.zig");
+    pub const CreateSpGame = @import("states/CreateServer.zig");
+    pub const Credits = @import("states/CreateServer.zig");
     pub const Gameplay = @import("states/Gameplay.zig");
-    pub const JoinGame = @import("states/JoinGame.zig");
+    pub const JoinGame = @import("states/CreateServer.zig");
     pub const MainMenu = @import("states/MainMenu.zig");
-    pub const Options = @import("states/Options.zig");
-    pub const PauseMenu = @import("states/PauseMenu.zig");
+    pub const Options = @import("states/CreateServer.zig");
+    pub const PauseMenu = @import("states/CreateServer.zig");
     pub const Splash = @import("states/Splash.zig");
 };
 
@@ -66,9 +77,6 @@ current_state: StateAndTransition = .{
 },
 next_state: ?State = null,
 
-transition_buffer_from: []u32,
-transition_buffer_to: []u32,
-
 /// total time spent in updating
 update_time: f32 = 0.0,
 
@@ -93,9 +101,6 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .pause_menu = .{},
         .splash = states.Splash.init(),
 
-        .transition_buffer_from = undefined,
-        .transition_buffer_to = undefined,
-
         .font_id = try resources.textures.getName("/assets/font.tex"),
     };
 
@@ -103,12 +108,6 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
 
     game.gameplay = try states.Gameplay.init(allocator, resources);
     errdefer game.gameplay.deinit();
-
-    game.transition_buffer_from = try allocator.alloc(u32, 1280 * 720);
-    errdefer allocator.free(game.transition_buffer_from);
-
-    game.transition_buffer_to = try allocator.alloc(u32, 1280 * 720);
-    errdefer allocator.free(game.transition_buffer_to);
 
     // this is necessary to make a clean enter/exit semantic.
     // every other leave/enter pair will be done in update,
@@ -127,8 +126,6 @@ pub fn deinit(self: *Self) void {
     }
 
     self.gameplay.deinit();
-    self.allocator.free(self.transition_buffer_from);
-    self.allocator.free(self.transition_buffer_to);
     self.* = undefined;
 }
 
@@ -191,7 +188,7 @@ pub fn update(self: *Self, delta_time: f32) !void {
 
                     else => .in_and_out,
                 },
-                .duration = 0.25,
+                .duration = 0.5,
             },
         };
         self.next_state = null;
@@ -203,42 +200,51 @@ pub fn update(self: *Self, delta_time: f32) !void {
     }
 }
 
-fn renderState(self: *Self, state: State, target: zwl.PixelBuffer, delta_time: f32) !void {
+fn renderState(self: *Self, state: State, renderer: *Renderer, render_target: *RenderTarget, delta_time: f32) !void {
     switch (state) {
-        .create_server => try self.create_server.render(target, self.render_time, delta_time),
-        .create_sp_game => try self.create_sp_game.render(target, self.render_time, delta_time),
-        .credits => try self.credits.render(target, self.render_time, delta_time),
-        .gameplay => try self.gameplay.render(target, self.render_time, delta_time),
-        .join_game => try self.join_game.render(target, self.render_time, delta_time),
-        .main_menu => try self.main_menu.render(target, self.render_time, delta_time),
-        .options => try self.options.render(target, self.render_time, delta_time),
-        .pause_menu => try self.pause_menu.render(target, self.render_time, delta_time),
-        .splash => try self.splash.render(target, self.render_time, delta_time),
+        .create_server => try self.create_server.render(renderer, render_target, self.render_time, delta_time),
+        .create_sp_game => try self.create_sp_game.render(renderer, render_target, self.render_time, delta_time),
+        .credits => try self.credits.render(renderer, render_target, self.render_time, delta_time),
+        .gameplay => try self.gameplay.render(renderer, render_target, self.render_time, delta_time),
+        .join_game => try self.join_game.render(renderer, render_target, self.render_time, delta_time),
+        .main_menu => try self.main_menu.render(renderer, render_target, self.render_time, delta_time),
+        .options => try self.options.render(renderer, render_target, self.render_time, delta_time),
+        .pause_menu => try self.pause_menu.render(renderer, render_target, self.render_time, delta_time),
+        .splash => try self.splash.render(renderer, render_target, self.render_time, delta_time),
     }
 }
 
-pub fn render(self: *Self, target: zwl.PixelBuffer, delta_time: f32) !void {
+pub fn render(self: *Self, renderer: *Renderer, delta_time: f32) !void {
     defer self.render_time += delta_time;
 
     switch (self.current_state) {
-        .state => |state| try self.callOnState(state, "render", .{ target, self.render_time, delta_time }),
+        .state => |state| try self.callOnState(state, "render", .{
+            renderer,
+            renderer.screen(),
+            self.render_time,
+            delta_time,
+        }),
         .transition => |*transition| {
-            const src_from = zwl.PixelBuffer{
-                .width = 1280,
-                .height = 720,
-                .data = self.transition_buffer_from.ptr,
-            };
-            const src_to = zwl.PixelBuffer{
-                .width = 1280,
-                .height = 720,
-                .data = self.transition_buffer_to.ptr,
-            };
+            var src_from = try renderer.createRenderTarget(null);
+            defer src_from.deinit();
 
-            try self.callOnState(transition.from, "render", .{ src_from, self.render_time, delta_time });
-            try self.callOnState(transition.to, "render", .{ src_to, self.render_time, delta_time });
+            var src_to = try renderer.createRenderTarget(null);
+            defer src_to.deinit();
 
-            transitions.render(src_from, src_to, target, transition.progress, transition.style);
+            try self.callOnState(transition.from, "render", .{
+                renderer,
+                src_from,
+                self.render_time,
+                delta_time,
+            });
+            try self.callOnState(transition.to, "render", .{
+                renderer,
+                src_to,
+                self.render_time,
+                delta_time,
+            });
 
+            // transitions.render(renderer, null, src_from.getTexture(), src_to, transition.progress, transition.style);
             transition.progress += delta_time / transition.duration;
             if (transition.progress >= 1.0) {
                 self.current_state = .{
@@ -249,27 +255,26 @@ pub fn render(self: *Self, target: zwl.PixelBuffer, delta_time: f32) !void {
     }
 
     if (build_options.enable_frame_counter) { // Show frame time counter
-        var b = draw.Buffer{
-            .width = target.width,
-            .height = target.height,
-            .screen = std.mem.sliceAsBytes(target.span()),
-            .depth = undefined, // doesn't hurt as we're only doing 2D rendering
-        };
+        // var b = draw.Buffer{
+        //     .width = target.width,
+        //     .height = target.height,
+        //     .screen = std.mem.sliceAsBytes(target.span()),
+        //     .depth = undefined, // doesn't hurt as we're only doing 2D rendering
+        // };
 
-        const font = draw.BitmapFont{
-            .texture = (try self.resources.textures.get(self.font_id, Resources.usage.debug_draw)).toPixelDraw(),
-            .font_size_x = 12,
-            .font_size_y = 16,
-            .character_spacing = 11,
-        };
-
+        // const font = draw.BitmapFont{
+        //     .texture = (try self.resources.textures.get(self.font_id, Resources.usage.debug_draw)).toPixelDraw(),
+        //     .font_size_x = 12,
+        //     .font_size_y = 16,
+        //     .character_spacing = 11,
+        // };
         var print_buff: [128]u8 = undefined;
         const fpst = try std.fmt.bufPrint(
             &print_buff,
             "{d: >6.2} ms / {d: >4.0} FPS",
             .{ 1000.0 * delta_time, 1 / delta_time },
         );
-        b.drawBitmapFont(fpst, 20, 20, 1, 1, font);
+        // b.drawBitmapFont(fpst, 20, 20, 1, 1, font);
     }
 }
 

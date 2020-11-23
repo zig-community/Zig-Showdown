@@ -1,8 +1,8 @@
 const std = @import("std");
 const zlm = @import("zlm");
 
-const renderer = @import("root").renderer;
 const resource_pool = @import("../resource_pool.zig");
+const Renderer = @import("../Renderer.zig");
 
 const Self = @This();
 
@@ -66,15 +66,15 @@ vertices: []const Vertex,
 indices: []const Index,
 meshes: []const Mesh,
 
-renderer_detail: renderer.Model,
+renderer_detail: Renderer.details.Model,
 
-pub fn deinit(allocator: *std.mem.Allocator, self: *Self) void {
-    renderer.destroyModel(&self.renderer_detail);
+pub fn deinit(renderer: *Renderer, allocator: *std.mem.Allocator, self: *Self) void {
+    Renderer.details.destroyModel(renderer, &self.renderer_detail);
     self.arena.deinit();
     self.* = undefined;
 }
 
-pub fn loadFromMemory(allocator: *std.mem.Allocator, raw_data: []const u8, hint: []const u8) resource_pool.Error!Self {
+pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_data: []const u8, hint: []const u8) resource_pool.Error!Self {
 
     // CHANGES IN HERE MUST BE REFLECTED IN
     // src/tools/obj-conv.zig
@@ -149,7 +149,7 @@ pub fn loadFromMemory(allocator: *std.mem.Allocator, raw_data: []const u8, hint:
         }
     }
 
-    model.renderer_detail = try renderer.createModel(&model);
+    model.renderer_detail = try Renderer.details.createModel(renderer, &model);
 
     return model;
 }

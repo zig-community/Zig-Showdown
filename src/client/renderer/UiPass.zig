@@ -37,17 +37,24 @@ const DrawCall = union(enum) {
         y0: isize,
         x1: isize,
         y1: isize,
-        color: Renderer.Color,
+        color: Color,
         thickness: u8,
     },
     polygon: struct {
         points: []Point,
-        style: PrimitiveStyle,
+        color: Color,
     },
     image: struct {
         dest_rectangle: Rectangle,
         src_rectangle: ?Rectangle,
         image: Resources.Texture,
+    },
+    text: struct {
+        x: isize,
+        y: isize,
+        font: Resources.Font,
+        color: Color,
+        string: []const u8,
     },
 };
 
@@ -85,6 +92,37 @@ pub fn drawImageStretched(self: *Self, dest_rectangle: Rectangle, src_rectangle:
             .dest_rectangle = dest_rectangle,
             .src_rectangle = src_rectangle,
             .image = image,
+        },
+    });
+}
+
+pub fn fillPolygon(self: *Self, dx: isize, dy: isize, color: Color, polygon: []const Point) !void {
+    const items = try self.arena.allocator.dupe(Point, polygon);
+    errdefer self.arena.allocator.free(items);
+
+    for (items) |*p| {
+        p.x += dx;
+        p.y += dy;
+    }
+    try self.drawcalls.append(DrawCall{
+        .polygon = .{
+            .points = items,
+            .color = color,
+        },
+    });
+}
+
+pub fn drawString(self: *Self, x: isize, y: isize, font: Resources.Font, color: Color, text: []const u8) !void {
+    const text_buf = try self.arena.allocator.dupe(u8, text);
+    errdefer self.arena.allocator.free(text_buf);
+
+    try self.drawcalls.append(DrawCall{
+        .text = .{
+            .x = x,
+            .y = y,
+            .font = font,
+            .color = color,
+            .string = text_buf,
         },
     });
 }

@@ -102,7 +102,45 @@ pub fn clear(self: *Self, rt: Renderer.RenderTarget, color: Color) void {
 }
 
 pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Renderer.UiPass) !void {
+    const Impl = struct {
+        fn setPixel(buffer: zwl.PixelBuffer, x: isize, y: isize, col: Color) void {
+            const ncol = toNativeColor(col);
+
+            buffer.setPixel(@intCast(u16, x), @intCast(u16, y), toNativeColor(col));
+        }
+
+        const ColorData = struct {
+            font: Resources.Font,
+            color: Color,
+        };
+        fn fetchFontPixel(data: ColorData, ix: isize, iy: isize) ?Color {
+            const x = std.math.cast(usize, ix) catch return null;
+            const y = std.math.cast(usize, iy) catch return null;
+            if (x >= data.font.texture.width or y >= data.font.texture.height) return null;
+
+            return if (data.font.texture.pixels[data.font.texture.width * y + x].a >= 0x80)
+                data.color
+            else
+                null;
+        }
+
+        fn fetchImagePixel(font: Resources.Texture, ix: isize, iy: isize) Color {
+            const x = std.math.cast(usize, ix) catch return Color.fromRgb(1, 0, 1);
+            const y = std.math.cast(usize, iy) catch return Color.fromRgb(1, 0, 1);
+            if (x >= font.width or y >= font.height) return Color.fromRgb(1, 0, 1);
+
+            return Color{
+                .r = font.pixels[font.width * y + x].r,
+                .g = font.pixels[font.width * y + x].g,
+                .b = font.pixels[font.width * y + x].b,
+                .a = font.pixels[font.width * y + x].a,
+            };
+        }
+    };
+    const Canvas = painterz.Canvas(zwl.PixelBuffer, Color, Impl.setPixel);
+
     const pixbuf = self.getPixBuf(render_target);
+    var canvas = Canvas.init(pixbuf);
 
     for (pass.drawcalls.items) |dc| {
         switch (dc) {
@@ -115,7 +153,7 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
                     width: u8,
                 };
 
-                const Canvas = painterz.Canvas(Context, Color, struct {
+                const LineCanvas = painterz.Canvas(Context, Color, struct {
                     fn setPixel(context: Context, sx: isize, sy: isize, col: Color) void {
                         const ncol = toNativeColor(col);
                         const limit = @as(isize, context.width) * @as(isize, context.width);
@@ -138,52 +176,17 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
                     }
                 }.setPixel);
 
-                var canvas = Canvas.init(Context{
+                var line_canvas = LineCanvas.init(Context{
                     .target = pixbuf,
                     .width = line.thickness,
                 });
 
-                canvas.drawLine(line.x0, line.y0, line.x1, line.y1, line.color);
+                line_canvas.drawLine(line.x0, line.y0, line.x1, line.y1, line.color);
             },
             .polygon => |polygon| {
-                @panic("TODO: not implemented yet!");
+                canvas.fillPolygon(0, 0, polygon.color, Renderer.UiPass.Point, polygon.points);
             },
             .image => |image| {
-                const Impl = struct {
-                    fn setPixel(buffer: zwl.PixelBuffer, x: isize, y: isize, col: Color) void {
-                        const ncol = toNativeColor(col);
-
-                        buffer.setPixel(@intCast(u16, x), @intCast(u16, y), toNativeColor(col));
-                    }
-
-                    fn fetchFontPixel(font: Resources.TexturePool.Resource, ix: isize, iy: isize) zwl.Pixel {
-                        const x = std.math.cast(usize, ix) catch return theme.zig_yellow;
-                        const y = std.math.cast(usize, iy) catch return theme.zig_yellow;
-                        if (x >= font.width or y >= font.height) return theme.zig_yellow;
-
-                        return if (font.pixels[font.width * y + x].a >= 0x80)
-                            theme.zig_bright
-                        else
-                            theme.zig_yellow;
-                    }
-
-                    fn fetchImagePixel(font: Resources.Texture, ix: isize, iy: isize) Color {
-                        const x = std.math.cast(usize, ix) catch return Color.fromRgb(1, 0, 1);
-                        const y = std.math.cast(usize, iy) catch return Color.fromRgb(1, 0, 1);
-                        if (x >= font.width or y >= font.height) return Color.fromRgb(1, 0, 1);
-
-                        return Color{
-                            .r = font.pixels[font.width * y + x].r,
-                            .g = font.pixels[font.width * y + x].g,
-                            .b = font.pixels[font.width * y + x].b,
-                            .a = font.pixels[font.width * y + x].a,
-                        };
-                    }
-                };
-                const Canvas = painterz.Canvas(zwl.PixelBuffer, Color, Impl.setPixel);
-
-                var canvas = Canvas.init(pixbuf);
-
                 const src_rect = if (image.src_rectangle) |r| r else Renderer.UiPass.Rectangle{
                     .x = 0,
                     .y = 0,
@@ -200,9 +203,28 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
                     src_rect.y,
                     src_rect.width,
                     src_rect.height,
+                    false,
                     image.image,
                     Impl.fetchImagePixel,
                 );
+            },
+            .text => |text| {
+                for (text.string) |c, i| {
+                    canvas.copyRectangle(
+                        text.x + @intCast(isize, text.font.glyph_size.width * i),
+                        text.y,
+                        @intCast(isize, text.font.glyph_size.width * (c % 16)),
+                        @intCast(isize, text.font.glyph_size.height * (c / 16)),
+                        text.font.glyph_size.width,
+                        text.font.glyph_size.height,
+                        true,
+                        Impl.ColorData{
+                            .font = text.font,
+                            .color = text.color,
+                        },
+                        Impl.fetchFontPixel,
+                    );
+                }
             },
         }
     }

@@ -12,14 +12,6 @@ const Resources = @import("../Resources.zig");
 
 const Self = @This();
 
-// const Canvas = painterz.Canvas(zwl.PixelBuffer, zwl.Pixel, struct {
-//     fn setPixel(buf: zwl.PixelBuffer, x: isize, y: isize, col: zwl.Pixel) void {
-//         if (x < 0 or y < 0 or x >= buf.width or y >= buf.height)
-//             return;
-//         buf.setPixel(@intCast(u16, x), @intCast(u16, y), col);
-//     }
-// }.setPixel);
-
 const MenuItem = struct {
     const extension_time = 0.3;
     title: []const u8,
@@ -61,7 +53,7 @@ current_item: usize = 0,
 
 timer: f32 = 0.0,
 
-items_font_id: Resources.TexturePool.ResourceName,
+items_font_id: Resources.FontPool.ResourceName,
 background_ids: [3]Resources.TexturePool.ResourceName,
 current_background: usize = 0,
 
@@ -70,7 +62,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .resources = resources,
         .allocator = allocator,
 
-        .items_font_id = try resources.textures.getName("/assets/font.tex"),
+        .items_font_id = try resources.fonts.getName("/assets/font.tex"),
         .background_ids = [3]Resources.TexturePool.ResourceName{
             try resources.textures.getName("/assets/backgrounds/matte-01.tex"),
             try resources.textures.getName("/assets/backgrounds/matte-02.tex"),
@@ -114,7 +106,7 @@ pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTa
 
     const screen_size = render_target.size();
 
-    const font = try self.resources.textures.get(self.items_font_id, Resources.usage.menu_render);
+    const font = try self.resources.fonts.get(self.items_font_id, Resources.usage.menu_render);
     const background = try self.resources.textures.get(self.background_ids[self.current_background], Resources.usage.menu_render);
 
     try pass.drawImageStretched(
@@ -128,48 +120,35 @@ pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTa
         background,
     );
 
-    // const glyph_w = font.width / 16;
-    // const glyph_h = font.height / 16;
+    for (self.items) |*item, index| {
+        const top = @intCast(isize, screen_size.height - self.items.len * 50 + 40 * index);
 
-    // for (self.items) |*item, index| {
-    //     const top = @intCast(isize, render_target.height - self.items.len * 50 + 40 * index);
+        const height = 30;
+        const default_width = 250;
 
-    //     const height = 30;
-    //     const default_width = 250;
+        const top_width = default_width + @floatToInt(isize, 50 * math.smoothstep(item.extension));
+        const bot_width = default_width + @floatToInt(isize, 30 * math.smoothstep(item.extension));
 
-    //     const top_width = default_width + @floatToInt(isize, 50 * math.smoothstep(item.extension));
-    //     const bot_width = default_width + @floatToInt(isize, 30 * math.smoothstep(item.extension));
+        const poly = [_]Renderer.UiPass.Point{
+            .{ .x = 0, .y = 0 },
+            .{ .x = top_width, .y = 0 },
+            .{ .x = bot_width, .y = height },
+            .{ .x = 0, .y = height },
+        };
 
-    //     const poly = [_]painterz.Point{
-    //         .{ .x = 0, .y = 0 },
-    //         .{ .x = top_width, .y = 0 },
-    //         .{ .x = bot_width, .y = height },
-    //         .{ .x = 0, .y = height },
-    //     };
+        try pass.fillPolygon(0, top, theme.zig_yellow, &poly);
 
-    //     canvas.fillPolygon(0, top, theme.zig_yellow, &poly);
+        const pad = @intCast(isize, (height - font.glyph_size.height) / 2);
 
-    //     const pad = @intCast(isize, (height - glyph_h) / 2);
-    //     for (item.title) |c, i| {
-    //         canvas.copyRectangle(
-    //             @intCast(isize, glyph_w * i) + pad,
-    //             top + pad,
-    //             @intCast(isize, glyph_w * (c % 16)),
-    //             @intCast(isize, glyph_h * (c / 16)),
-    //             glyph_w,
-    //             glyph_h,
-    //             font,
-    //             fetchFontPixel,
-    //         );
-    //     }
+        try pass.drawString(pad, top + pad, font, theme.zig_bright, item.title);
 
-    //     const extended = (index == self.current_item);
-    //     item.extension = std.math.clamp(
-    //         if (extended) item.extension + delta_time / MenuItem.extension_time else item.extension - delta_time / MenuItem.extension_time,
-    //         0.0,
-    //         1.0,
-    //     );
-    // }
+        const extended = (index == self.current_item);
+        item.extension = std.math.clamp(
+            if (extended) item.extension + delta_time / MenuItem.extension_time else item.extension - delta_time / MenuItem.extension_time,
+            0.0,
+            1.0,
+        );
+    }
 
     renderer.clear(render_target, theme.zig_dark);
     try renderer.submit(render_target, pass);

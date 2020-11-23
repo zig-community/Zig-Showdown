@@ -148,6 +148,62 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
             .polygon => |polygon| {
                 @panic("TODO: not implemented yet!");
             },
+            .image => |image| {
+                const Impl = struct {
+                    fn setPixel(buffer: zwl.PixelBuffer, x: isize, y: isize, col: Color) void {
+                        const ncol = toNativeColor(col);
+
+                        buffer.setPixel(@intCast(u16, x), @intCast(u16, y), toNativeColor(col));
+                    }
+
+                    fn fetchFontPixel(font: Resources.TexturePool.Resource, ix: isize, iy: isize) zwl.Pixel {
+                        const x = std.math.cast(usize, ix) catch return theme.zig_yellow;
+                        const y = std.math.cast(usize, iy) catch return theme.zig_yellow;
+                        if (x >= font.width or y >= font.height) return theme.zig_yellow;
+
+                        return if (font.pixels[font.width * y + x].a >= 0x80)
+                            theme.zig_bright
+                        else
+                            theme.zig_yellow;
+                    }
+
+                    fn fetchImagePixel(font: Resources.Texture, ix: isize, iy: isize) Color {
+                        const x = std.math.cast(usize, ix) catch return Color.fromRgb(1, 0, 1);
+                        const y = std.math.cast(usize, iy) catch return Color.fromRgb(1, 0, 1);
+                        if (x >= font.width or y >= font.height) return Color.fromRgb(1, 0, 1);
+
+                        return Color{
+                            .r = font.pixels[font.width * y + x].r,
+                            .g = font.pixels[font.width * y + x].g,
+                            .b = font.pixels[font.width * y + x].b,
+                            .a = font.pixels[font.width * y + x].a,
+                        };
+                    }
+                };
+                const Canvas = painterz.Canvas(zwl.PixelBuffer, Color, Impl.setPixel);
+
+                var canvas = Canvas.init(pixbuf);
+
+                const src_rect = if (image.src_rectangle) |r| r else Renderer.UiPass.Rectangle{
+                    .x = 0,
+                    .y = 0,
+                    .width = image.image.width,
+                    .height = image.image.height,
+                };
+
+                canvas.copyRectangleStretched(
+                    image.dest_rectangle.x,
+                    image.dest_rectangle.y,
+                    image.dest_rectangle.width,
+                    image.dest_rectangle.height,
+                    src_rect.x,
+                    src_rect.y,
+                    src_rect.width,
+                    src_rect.height,
+                    image.image,
+                    Impl.fetchImagePixel,
+                );
+            },
         }
     }
 }

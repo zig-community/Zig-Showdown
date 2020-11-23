@@ -104,7 +104,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .font_id = try resources.textures.getName("/assets/font.tex"),
     };
 
-    game.main_menu = try states.MainMenu.init(resources);
+    game.main_menu = try states.MainMenu.init(allocator, resources);
 
     game.gameplay = try states.Gameplay.init(allocator, resources);
     errdefer game.gameplay.deinit();

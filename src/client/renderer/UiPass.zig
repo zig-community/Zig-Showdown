@@ -12,6 +12,17 @@ const PrimitiveStyle = union(enum) {
 };
 
 pub const Point = struct { x: isize, y: isize };
+pub const Rectangle = struct {
+    x: isize,
+    y: isize,
+    width: usize,
+    height: usize,
+};
+pub const Size = Renderer.Size;
+
+const RectangleMode = enum {
+    stretched,
+};
 
 const DrawCall = union(enum) {
     rectangle: struct {
@@ -32,6 +43,11 @@ const DrawCall = union(enum) {
     polygon: struct {
         points: []Point,
         style: PrimitiveStyle,
+    },
+    image: struct {
+        dest_rectangle: Rectangle,
+        src_rectangle: ?Rectangle,
+        image: Resources.Texture,
     },
 };
 
@@ -59,6 +75,16 @@ pub fn drawLine(self: *Self, x0: isize, y0: isize, x1: isize, y1: isize, color: 
             .y1 = y1,
             .color = color,
             .thickness = thickness,
+        },
+    });
+}
+
+pub fn drawImageStretched(self: *Self, dest_rectangle: Rectangle, src_rectangle: ?Rectangle, image: Resources.Texture) !void {
+    try self.drawcalls.append(DrawCall{
+        .image = .{
+            .dest_rectangle = dest_rectangle,
+            .src_rectangle = src_rectangle,
+            .image = image,
         },
     });
 }

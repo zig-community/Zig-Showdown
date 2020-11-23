@@ -7,6 +7,7 @@
 const std = @import("std");
 const zwl = @import("zwl");
 const painterz = @import("painterz");
+const draw = @import("pixel_draw");
 
 const WindowPlatform = @import("root").WindowPlatform;
 
@@ -26,8 +27,11 @@ fn toNativeColor(c: Color) zwl.Pixel {
     };
 }
 
+allocator: *std.mem.Allocator,
 window: *WindowPlatform.Window,
 pixbuf: ?zwl.PixelBuffer,
+
+z_buffer: []f32,
 
 /// Initializes a new rendering backend instance for the given window.
 pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
@@ -43,14 +47,23 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
         },
     });
 
-    return Self{
+    var fb = Self{
+        .allocator = allocator,
         .window = window,
         .pixbuf = null,
+        .z_buffer = undefined,
     };
+
+    fb.z_buffer = try allocator.alloc(f32, 0);
+    errdefer allocator.free(fb.z_buffer);
+
+    return fb;
 }
 
 /// Destroys a previously created rendering instance.
-pub fn deinit(self: *Self) void {}
+pub fn deinit(self: *Self) void {
+    self.allocator.free(self.z_buffer);
+}
 
 /// Starts to render a new frame. This is meant as a notification
 /// event to prepare a newly rendered frame.
@@ -231,5 +244,62 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
 }
 
 pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: Renderer.ScenePass) !void {
-    @panic("not implemented yet!");
+    const pixbuf = self.getPixBuf(render_target);
+
+    var b = draw.Buffer{
+        .width = pixbuf.width,
+        .height = pixbuf.height,
+        .screen = std.mem.sliceAsBytes(pixbuf.span()),
+        .depth = undefined, // oh no
+    };
+    if (self.z_buffer.len != b.screen.len) {
+        self.z_buffer = try self.allocator.realloc(self.z_buffer, b.screen.len);
+    }
+    b.depth = self.z_buffer;
+
+    // // Clear the z-buffer
+    std.mem.set(f32, self.z_buffer, std.math.inf(f32));
+
+    const resources = @fieldParentPtr(Renderer, "implementation", self).resources orelse @panic("resources must be set before rendering!");
+
+    for (pass.drawcalls.items) |dc| {
+        switch (dc) {
+            .model => |drawcall| {
+                for (drawcall.model.meshes) |mesh, ind| {
+                    const texture_id = try resources.textures.getName(mesh.texture()); // this is not optimal,but okayish
+                    const texture = try resources.textures.get(texture_id, Resources.usage.generic_render);
+
+                    // ugly workaround to draw meshes with pixel_draw:
+                    // converts between immutable data and mutable data
+                    var index: usize = 3 * mesh.offset;
+                    while (index < 3 * (mesh.offset + mesh.length)) : (index += 3) {
+                        var vertices: [3]draw.Vertex = undefined;
+                        for (vertices) |*dv, i| {
+                            const sv = drawcall.model.vertices[drawcall.model.indices[index + i]];
+                            dv.* = draw.Vertex{
+                                .pos = .{
+                                    .x = sv.x,
+                                    .y = sv.y,
+                                    .z = sv.z,
+                                },
+                                .uv = .{
+                                    .x = sv.u,
+                                    .y = sv.v,
+                                },
+                            };
+                        }
+                        var indices = [3]u32{ 0, 1, 2 };
+
+                        var temp_mesh = draw.Mesh{
+                            .v = &vertices,
+                            .i = &indices,
+                            .texture = texture.toPixelDraw(),
+                        };
+
+                        b.drawMesh(temp_mesh, .Texture, drawcall.transform);
+                    }
+                }
+            },
+        }
+    }
 }

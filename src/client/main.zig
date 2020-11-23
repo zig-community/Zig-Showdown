@@ -23,7 +23,7 @@ pub const WindowPlatform = zwl.Platform(.{
 
 /// This is a type that abstracts rendering tasks into
 /// a platform-independent matter
-pub const Renderer =@import("Renderer.zig");
+pub const Renderer = @import("Renderer.zig");
 
 pub fn main() anyerror!u8 {
     defer _ = gpa.deinit();
@@ -67,6 +67,9 @@ pub fn main() anyerror!u8 {
 
     var resources = Resources.init(global_allocator, &renderer);
     defer resources.deinit();
+
+    // TODO: This is a ugly hack in the design and should be resolved
+    renderer.resources = &resources;
 
     var game = try Game.init(global_allocator, &resources);
     defer game.deinit();

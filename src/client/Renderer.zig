@@ -25,12 +25,14 @@ pub const Size = struct {
 allocator: *std.mem.Allocator,
 window: *WindowPlatform.Window,
 implementation: Implementation,
+resources: ?*Resources,
 
 /// Initializes a new rendering backend instance for the given window.
 pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
     return Self{
         .allocator = allocator,
         .window = window,
+        .resources = null,
         .implementation = try Implementation.init(allocator, window),
     };
 }

@@ -4,7 +4,8 @@ const Resources = @import("../Resources.zig");
 
 const Self = @This();
 
-const Transform = @import("zlm").Mat4;
+// TODO: Replace .cam with an actual mat4
+pub const Transform = @import("pixel_draw").Camera3D;
 
 const DrawCall = union(enum) {
     model: struct {
@@ -24,4 +25,13 @@ pub fn init(allocator: *std.mem.Allocator) Self {
 pub fn deinit(self: *Self) void {
     self.drawcalls.deinit();
     self.* = undefined;
+}
+
+pub fn drawModel(self: *Self, model: Resources.Model, transform: Transform) !void {
+    try self.drawcalls.append(DrawCall{
+        .model = .{
+            .model = model,
+            .transform = transform,
+        },
+    });
 }

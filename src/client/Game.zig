@@ -84,7 +84,7 @@ update_time: f32 = 0.0,
 render_time: f32 = 0.0,
 
 // used resources:
-font_id: Resources.TexturePool.ResourceName,
+font_id: Resources.FontPool.ResourceName,
 
 pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
     var game = Self{
@@ -101,7 +101,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .pause_menu = .{},
         .splash = states.Splash.init(allocator),
 
-        .font_id = try resources.textures.getName("/assets/font.tex"),
+        .font_id = try resources.fonts.getName("/assets/font.tex"),
     };
 
     game.main_menu = try states.MainMenu.init(allocator, resources);
@@ -255,26 +255,25 @@ pub fn render(self: *Self, renderer: *Renderer, delta_time: f32) !void {
     }
 
     if (build_options.enable_frame_counter) { // Show frame time counter
-        // var b = draw.Buffer{
-        //     .width = target.width,
-        //     .height = target.height,
-        //     .screen = std.mem.sliceAsBytes(target.span()),
-        //     .depth = undefined, // doesn't hurt as we're only doing 2D rendering
-        // };
-
-        // const font = draw.BitmapFont{
-        //     .texture = (try self.resources.textures.get(self.font_id, Resources.usage.debug_draw)).toPixelDraw(),
-        //     .font_size_x = 12,
-        //     .font_size_y = 16,
-        //     .character_spacing = 11,
-        // };
         var print_buff: [128]u8 = undefined;
         const fpst = try std.fmt.bufPrint(
             &print_buff,
             "{d: >6.2} ms / {d: >4.0} FPS",
             .{ 1000.0 * delta_time, 1 / delta_time },
         );
-        // b.drawBitmapFont(fpst, 20, 20, 1, 1, font);
+
+        var pass = Renderer.UiPass.init(self.allocator);
+        defer pass.deinit();
+
+        try pass.drawString(
+            20,
+            20,
+            try self.resources.fonts.get(self.font_id, Resources.usage.debug_draw),
+            Renderer.Color.fromRgb(1, 1, 1),
+            fpst,
+        );
+
+        try renderer.submit(renderer.screen(), pass);
     }
 }
 

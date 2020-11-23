@@ -70,10 +70,12 @@ pub fn main() anyerror!u8 {
     // kick-off vblank events:
     try render(&game, window, 0.0);
 
+    const stretch_factor = 1.0 / cli.options.@"time-stretch";
+
     main_loop: while (true) {
         {
             const update_delta = @intToFloat(f32, update_timer.lap()) / std.time.ns_per_s;
-            try game.update(update_delta);
+            try game.update(stretch_factor * update_delta);
         }
 
         const event = try platform.waitForEvent();
@@ -89,7 +91,7 @@ pub fn main() anyerror!u8 {
 
             .WindowVBlank => {
                 const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
-                try render(&game, window, render_delta);
+                try render(&game, window, stretch_factor * render_delta);
             },
 
             .WindowDamaged => {}, // ignore this
@@ -126,14 +128,25 @@ const CliArgs = struct {
 
     help: bool = false,
 
+    @"time-stretch": f32 = 1.0,
+
     pub const shorthands = .{
         .f = "fullscreen",
+        .h = "help",
     };
 };
 
 fn printUsage(writer: anytype) !void {
     try writer.writeAll(
-        \\Someone should write this
+        \\Usage: showdown
+        \\Starts Zig SHOWDOWN.
+        \\
+        \\  -h, --help               display this help and exit
+        \\      --time-stretch=FAC   Stretches the game speed by FAC. FAC="2.0" means the game
+        \\                           will run with half the speed.
+        \\  -p, --port=PORT          Changes the port used for the game server to PORT.
+        \\  -f, --fullscreen=FULL    Will run the game in fullscreen mode when FULL = true.
+        \\
     );
 }
 

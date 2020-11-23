@@ -95,6 +95,11 @@ pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
         else
             self.current_item + 1;
         self.timer = 0;
+
+        // TODO: Remove this when input works
+        if (self.current_item == 0) {
+            Game.fromComponent(self).switchToState(.gameplay);
+        }
     }
     self.timer += delta_time;
 }

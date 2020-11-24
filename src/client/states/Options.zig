@@ -3,6 +3,8 @@
 const std = @import("std");
 const Renderer = @import("../Renderer.zig");
 const Resources = @import("../Resources.zig");
+const Input = @import("../Input.zig");
+const Game = @import("../Game.zig");
 const Color = @import("../renderer/Color.zig");
 
 const Self = @This();
@@ -15,6 +17,12 @@ pub fn init(resources: *Resources) !Self {
         .resources = resources,
         .font_id = try resources.fonts.getName("/assets/font.tex"),
     };
+}
+
+pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void {
+    if (input.isAnyHit()) {
+        Game.fromComponent(self).switchToState(.main_menu);
+    }
 }
 
 pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTarget, total_time: f32, delta_time: f32) !void {

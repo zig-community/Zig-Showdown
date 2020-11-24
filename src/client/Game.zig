@@ -6,6 +6,7 @@ const draw = @import("pixel_draw");
 const Self = @This();
 const Resources = @import("Resources.zig");
 const Renderer = @import("Renderer.zig");
+const Input = @import("Input.zig");
 
 ///! The core management structure for the game. This is
 ///! mostly platform independent game logic and rendering implementation.
@@ -59,6 +60,8 @@ main_menu: states.MainMenu,
 options: states.Options,
 pause_menu: states.PauseMenu,
 splash: states.Splash,
+
+running: bool = true,
 
 current_state: StateAndTransition = .{
     .state = build_options.initial_state,
@@ -137,7 +140,7 @@ fn callOnState(self: *Self, state: State, comptime fun: []const u8, args: anytyp
     }
 }
 
-pub fn update(self: *Self, delta_time: f32) !void {
+pub fn update(self: *Self, input: Input, delta_time: f32) !void {
     defer self.update_time += delta_time;
 
     if (self.next_state != null) {
@@ -181,7 +184,7 @@ pub fn update(self: *Self, delta_time: f32) !void {
     }
 
     switch (self.current_state) {
-        .state => |state| try self.callOnState(state, "update", .{ self.update_time, delta_time }),
+        .state => |state| try self.callOnState(state, "update", .{ input, self.update_time, delta_time }),
         .transition => {}, // do not update game logic in transitions
     }
 }

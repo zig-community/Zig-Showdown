@@ -7,11 +7,12 @@
 //! - optional: Announce the game via UDP broadcast to LAN
 
 const std = @import("std");
-const Renderer = @import("../Renderer.zig");
 const draw = @import("pixel_draw");
 
 const Self = @This();
 const Resources = @import("../Resources.zig");
+const Input = @import("../Input.zig");
+const Renderer = @import("../Renderer.zig");
 
 allocator: *std.mem.Allocator,
 resources: *Resources,
@@ -43,7 +44,7 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
+pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void {
     // if (draw.keyPressed(.up)) cam.rotation.x += delta * 2;
     // if (draw.keyPressed(.down)) cam.rotation.x -= delta * 2;
     // if (draw.keyPressed(.right)) cam.rotation.y += delta * 2;

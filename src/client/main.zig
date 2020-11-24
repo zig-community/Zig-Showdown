@@ -4,6 +4,7 @@ const args = @import("args");
 const zwl = @import("zwl");
 
 const Game = @import("Game.zig");
+const Input = @import("Input.zig");
 
 const Resources = @import("Resources.zig");
 
@@ -59,6 +60,8 @@ pub fn main() anyerror!u8 {
         .track_damage = false,
         .visible = true,
         .decorations = true,
+        .track_mouse = true,
+        .track_keyboard = true,
     });
     defer window.deinit();
 
@@ -71,6 +74,8 @@ pub fn main() anyerror!u8 {
     // TODO: This is a ugly hack in the design and should be resolved
     renderer.resources = &resources;
 
+    var input = Input.init();
+
     var game = try Game.init(global_allocator, &resources);
     defer game.deinit();
 
@@ -79,12 +84,7 @@ pub fn main() anyerror!u8 {
 
     const stretch_factor = 1.0 / cli.options.@"time-stretch";
 
-    main_loop: while (true) {
-        {
-            const update_delta = @intToFloat(f32, update_timer.lap()) / std.time.ns_per_s;
-            try game.update(stretch_factor * update_delta);
-        }
-
+    main_loop: while (game.running) {
         const event = try platform.waitForEvent();
 
         switch (event) {
@@ -97,16 +97,62 @@ pub fn main() anyerror!u8 {
             .WindowDestroyed, .ApplicationTerminated => break :main_loop,
 
             .WindowVBlank => {
-                try renderer.beginFrame();
+                // Lockstep updates with renderer for now
+                {
+                    const update_delta = @intToFloat(f32, update_timer.lap()) / std.time.ns_per_s;
+                    try game.update(input, stretch_factor * update_delta);
+                }
 
-                const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
+                input.resetEvents();
 
-                try game.render(&renderer, stretch_factor * render_delta);
-
-                try renderer.endFrame();
+                // After updating, render the game
+                {
+                    try renderer.beginFrame();
+                    const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
+                    try game.render(&renderer, stretch_factor * render_delta);
+                    try renderer.endFrame();
+                }
             },
 
             .WindowDamaged => {}, // ignore this
+
+            .KeyUp, .KeyDown => |ev| {
+                // TODO: This is a horrible hack and requires
+                // actual key codes from ZWL. Good enough to debug though
+                const button: ?Input.Button = switch (ev.scancode) {
+                    25, 111 => .up,
+                    39, 116 => .down,
+                    38, 113 => .left,
+                    40, 114 => .right,
+                    65 => .jump,
+                    36 => .accept,
+                    else => blk: {
+                        std.log.scoped(.input).info("unknown scancode: {}", .{ev.scancode});
+                        break :blk null;
+                    },
+                };
+
+                if (button) |btn| {
+                    input.updateButton(btn, event == .KeyDown);
+                }
+
+                if (event == .KeyDown)
+                    input.any_button_was_pressed = true;
+                if (event == .KeyUp)
+                    input.any_button_was_released = false;
+            },
+
+            .MouseButtonDown, .MouseButtonUp => |ev| {
+                switch (ev.button) {
+                    .left => input.updateButton(.left_mouse, event == .MouseButtonDown),
+                    else => {},
+                }
+            },
+
+            .MouseMotion => |ev| {
+                input.mouse_x = ev.x;
+                input.mouse_y = ev.y;
+            },
         }
     }
 

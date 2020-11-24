@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Resources = @import("../Resources.zig");
 const Renderer = @import("../Renderer.zig");
+const ui = @import("../ui.zig");
 
 const Self = @This();
 const Color = Renderer.Color;
@@ -11,14 +12,9 @@ const PrimitiveStyle = union(enum) {
     color: Renderer.Color,
 };
 
-pub const Point = struct { x: isize, y: isize };
-pub const Rectangle = struct {
-    x: isize,
-    y: isize,
-    width: usize,
-    height: usize,
-};
-pub const Size = Renderer.Size;
+pub const Point = ui.Point;
+pub const Rectangle = ui.Rectangle;
+pub const Size = ui.Size;
 
 const RectangleMode = enum {
     stretched,

@@ -2,10 +2,11 @@
 //! Zig logo splash, possibly with zero flying through the screen
 
 const std = @import("std");
-const Renderer = @import("../Renderer.zig");
 const math = @import("../math.zig");
 const theme = @import("../theme.zig");
 
+const Renderer = @import("../Renderer.zig");
+const Input = @import("../Input.zig");
 const Game = @import("../Game.zig");
 
 const Self = @This();
@@ -26,8 +27,8 @@ pub fn enter(self: *Self, total_time: f32) !void {
     self.progress = 0.0;
 }
 
-pub fn update(self: *Self, total_time: f32, delta_time: f32) !void {
-    if (total_time >= self.duration + 1.0) {
+pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void {
+    if (total_time >= self.duration + 1.0 or input.isAnyHit()) {
         Game.fromComponent(self).switchToState(.main_menu);
     }
 }

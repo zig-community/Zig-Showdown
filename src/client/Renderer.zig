@@ -2,6 +2,8 @@ const std = @import("std");
 const zwl = @import("zwl");
 const build_options = @import("build_options");
 
+const ui = @import("ui.zig");
+
 const WindowPlatform = @import("root").WindowPlatform;
 const Resources = @import("Resources.zig");
 
@@ -18,10 +20,7 @@ pub const UiPass = @import("renderer/UiPass.zig");
 pub const RenderTarget = @import("renderer/RenderTarget.zig");
 pub const Transition = @import("renderer/Transition.zig");
 
-pub const Size = struct {
-    width: usize,
-    height: usize,
-};
+pub const Size = ui.Size;
 
 allocator: *std.mem.Allocator,
 window: *WindowPlatform.Window,

@@ -65,6 +65,16 @@ pub fn clear(self: *Self, rt: RenderTarget, color: Color) void {
     return self.implementation.clear(rt, color);
 }
 
+/// Creates a new UiPass.
+pub fn createUiPass(self: *Self) UiPass {
+    return UiPass.init(self.allocator);
+}
+
+/// Creates a new ScenePass.
+pub fn createScenePass(self: *Self) ScenePass {
+    return ScenePass.init(self.allocator);
+}
+
 pub fn submit(self: *Self, render_target: RenderTarget, pass: anytype) !void {
     const T = @TypeOf(pass);
     switch (T) {

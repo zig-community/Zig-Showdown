@@ -80,20 +80,18 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .allocator = allocator,
         .resources = resources,
 
-        .create_server = .{},
-        .create_sp_game = .{},
-        .credits = .{},
+        .create_server = try states.CreateServer.init(resources),
+        .create_sp_game = try states.CreateSpGame.init(resources),
+        .credits = try states.Credits.init(resources),
         .gameplay = undefined,
-        .join_game = .{},
-        .main_menu = undefined,
-        .options = .{},
-        .pause_menu = .{},
+        .join_game = try states.JoinGame.init(resources),
+        .main_menu = try states.MainMenu.init(allocator, resources),
+        .options = try states.Options.init(resources),
+        .pause_menu = try states.PauseMenu.init(resources),
         .splash = states.Splash.init(allocator),
 
         .font_id = try resources.fonts.getName("/assets/font.tex"),
     };
-
-    game.main_menu = try states.MainMenu.init(allocator, resources);
 
     game.gameplay = try states.Gameplay.init(allocator, resources);
     errdefer game.gameplay.deinit();
@@ -251,7 +249,7 @@ pub fn render(self: *Self, renderer: *Renderer, delta_time: f32) !void {
             .{ 1000.0 * delta_time, 1 / delta_time },
         );
 
-        var pass = Renderer.UiPass.init(self.allocator);
+        var pass = renderer.createUiPass();
         defer pass.deinit();
 
         try pass.drawString(

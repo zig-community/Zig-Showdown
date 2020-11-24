@@ -66,6 +66,7 @@ pub fn init(allocator: *std.mem.Allocator) Self {
 
 pub fn deinit(self: *Self) void {
     self.drawcalls.deinit();
+    self.arena.deinit();
     self.* = undefined;
 }
 

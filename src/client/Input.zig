@@ -10,6 +10,7 @@ pub const Button = enum(usize) {
     right = 4,
     jump = 5,
     accept = 6,
+    back = 7,
 };
 
 pub const MouseTranslation = struct {

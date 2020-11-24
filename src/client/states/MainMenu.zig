@@ -100,7 +100,7 @@ pub fn enter(self: *Self, total_time: f32) !void {
 
 fn triggerItem(self: *Self, index: usize) void {
     switch (index) {
-        MENU_SP => Game.fromComponent(self).switchToState(.create_sp_game), // TODO: this should be .create_sp_game, but for debugging it's easier this way
+        MENU_SP => Game.fromComponent(self).switchToState(.gameplay), // TODO: this should be .create_sp_game, but for debugging it's easier this way
         MENU_JOIN => Game.fromComponent(self).switchToState(.join_game),
         MENU_HOST => Game.fromComponent(self).switchToState(.create_server),
         MENU_OPTIONS => Game.fromComponent(self).switchToState(.options),

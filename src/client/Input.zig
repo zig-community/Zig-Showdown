@@ -13,6 +13,13 @@ pub const Button = enum(usize) {
     back = 7,
 };
 
+pub const Axis = enum(usize) {
+    look_horizontal = 0,
+    look_vertical = 1,
+    move_horizontal = 2,
+    move_vertical = 3,
+};
+
 pub const MouseTranslation = struct {
     dx: isize,
     dy: isize,
@@ -90,6 +97,19 @@ pub fn mouseDelta(self: Self) MouseTranslation {
     return MouseTranslation{
         .dx = self.mouse_x - self.previous_mouse_x,
         .dy = self.mouse_y - self.previous_mouse_y,
+    };
+}
+
+/// Returns the input value [-1.0; 1.0] for each axis.
+pub fn axis(self: Self, ax: Axis) f32 {
+    // TODO: Improve this and add controller support
+    return switch (ax) {
+        // Currently returns speed between 0 and 100 pixels per frame
+        .look_horizontal => std.math.clamp(0.01 * @intToFloat(f32, self.mouseDelta().dx), -1.0, 1.0),
+        .look_vertical => std.math.clamp(0.01 * @intToFloat(f32, self.mouseDelta().dy), -1.0, 1.0),
+
+        .move_horizontal => (if (self.isPressed(.right)) @as(f32, 1) else 0) - (if (self.isPressed(.left)) @as(f32, 1) else 0),
+        .move_vertical => (if (self.isPressed(.up)) @as(f32, 1) else 0) - (if (self.isPressed(.down)) @as(f32, 1) else 0),
     };
 }
 

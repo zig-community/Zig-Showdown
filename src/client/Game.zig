@@ -11,25 +11,14 @@ const Renderer = @import("root").Renderer;
 ///! The core management structure for the game. This is
 ///! mostly platform independent game logic and rendering implementation.
 const states = struct {
-    // pub const CreateServer = @import("states/CreateServer.zig");
-    // pub const CreateSpGame = @import("states/CreateSpGame.zig");
-    // pub const Credits = @import("states/Credits.zig");
-    // pub const Gameplay = @import("states/Gameplay.zig");
-    // pub const JoinGame = @import("states/JoinGame.zig");
-    // pub const MainMenu = @import("states/MainMenu.zig");
-    // pub const Options = @import("states/Options.zig");
-    // pub const PauseMenu = @import("states/PauseMenu.zig");
-    // pub const Splash = @import("states/Splash.zig");
-
-    // TODO: REVERT THIS WHEN RENDERING API IS DECIDED!
     pub const CreateServer = @import("states/CreateServer.zig");
-    pub const CreateSpGame = @import("states/CreateServer.zig");
-    pub const Credits = @import("states/CreateServer.zig");
+    pub const CreateSpGame = @import("states/CreateSpGame.zig");
+    pub const Credits = @import("states/Credits.zig");
     pub const Gameplay = @import("states/Gameplay.zig");
-    pub const JoinGame = @import("states/CreateServer.zig");
+    pub const JoinGame = @import("states/JoinGame.zig");
     pub const MainMenu = @import("states/MainMenu.zig");
-    pub const Options = @import("states/CreateServer.zig");
-    pub const PauseMenu = @import("states/CreateServer.zig");
+    pub const Options = @import("states/Options.zig");
+    pub const PauseMenu = @import("states/PauseMenu.zig");
     pub const Splash = @import("states/Splash.zig");
 };
 

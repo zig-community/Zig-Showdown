@@ -55,6 +55,7 @@ timer: f32 = 0.0,
 
 items_font_id: Resources.FontPool.ResourceName,
 background_ids: [3]Resources.TexturePool.ResourceName,
+logo_id: Resources.TexturePool.ResourceName,
 current_background: usize = 0,
 
 pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
@@ -68,6 +69,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
             try resources.textures.getName("/assets/backgrounds/matte-02.tex"),
             try resources.textures.getName("/assets/backgrounds/matte-03.tex"),
         },
+        .logo_id = try resources.textures.getName("/assets/logo.tex"),
     };
 }
 
@@ -108,6 +110,7 @@ pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTa
 
     const font = try self.resources.fonts.get(self.items_font_id, Resources.usage.menu_render);
     const background = try self.resources.textures.get(self.background_ids[self.current_background], Resources.usage.menu_render);
+    const logo = try self.resources.textures.get(self.logo_id, Resources.usage.menu_render);
 
     try pass.drawImageStretched(
         .{
@@ -118,6 +121,19 @@ pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTa
         },
         null,
         background,
+    );
+
+    const aspect = @intToFloat(f32, logo.width) / @intToFloat(f32, logo.height);
+
+    try pass.drawImageStretched(
+        .{
+            .x = @floatToInt(isize, 0.2 * @intToFloat(f32, screen_size.width)),
+            .y = 45,
+            .width = @floatToInt(usize, 0.6 * @intToFloat(f32, screen_size.width)),
+            .height = @floatToInt(usize, 0.6 * @intToFloat(f32, screen_size.width) / aspect),
+        },
+        null,
+        logo,
     );
 
     for (self.items) |*item, index| {

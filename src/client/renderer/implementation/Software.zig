@@ -138,10 +138,13 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
                 null;
         }
 
-        fn fetchImagePixel(font: Resources.Texture, ix: isize, iy: isize) Color {
-            const x = std.math.cast(usize, ix) catch return Color.fromRgb(1, 0, 1);
-            const y = std.math.cast(usize, iy) catch return Color.fromRgb(1, 0, 1);
-            if (x >= font.width or y >= font.height) return Color.fromRgb(1, 0, 1);
+        fn fetchImagePixel(font: Resources.Texture, ix: isize, iy: isize) ?Color {
+            const x = std.math.cast(usize, ix) catch return null;
+            const y = std.math.cast(usize, iy) catch return null;
+            if (x >= font.width or y >= font.height) return null;
+
+            if (font.pixels[font.width * y + x].a < 0x80)
+                return null;
 
             return Color{
                 .r = font.pixels[font.width * y + x].r,
@@ -217,7 +220,7 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
                     src_rect.y,
                     src_rect.width,
                     src_rect.height,
-                    false,
+                    true,
                     image.image,
                     Impl.fetchImagePixel,
                 );

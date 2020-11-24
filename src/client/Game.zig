@@ -1,12 +1,11 @@
 const std = @import("std");
 const zwl = @import("zwl");
 const build_options = @import("build_options");
-const transitions = @import("transitions.zig");
 const draw = @import("pixel_draw");
 
 const Self = @This();
 const Resources = @import("Resources.zig");
-const Renderer = @import("root").Renderer;
+const Renderer = @import("Renderer.zig");
 
 ///! The core management structure for the game. This is
 ///! mostly platform independent game logic and rendering implementation.
@@ -39,7 +38,7 @@ const StateTransition = struct {
     from: State,
     to: State,
     progress: f32,
-    style: transitions.Style,
+    style: Renderer.Transition.Style,
     duration: f32,
 };
 
@@ -168,7 +167,7 @@ pub fn update(self: *Self, delta_time: f32) !void {
                     .create_server,
                     .create_sp_game,
                     .join_game,
-                    => @as(transitions.Style, switch (self.next_state.?) {
+                    => @as(Renderer.Transition.Style, switch (self.next_state.?) {
                         .main_menu => .slice_tr_to_bl,
                         else => .in_and_out,
                     }),
@@ -230,6 +229,15 @@ pub fn render(self: *Self, renderer: *Renderer, delta_time: f32) !void {
                 self.render_time,
                 delta_time,
             });
+
+            var transition_pass = Renderer.Transition{
+                .from = src_from.backing_texture.?,
+                .to = src_to.backing_texture.?,
+                .progress = transition.progress,
+                .style = transition.style,
+            };
+
+            try renderer.submit(renderer.screen(), transition_pass);
 
             // transitions.render(renderer, null, src_from.getTexture(), src_to, transition.progress, transition.style);
             transition.progress += delta_time / transition.duration;

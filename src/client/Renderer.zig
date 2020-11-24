@@ -16,6 +16,7 @@ pub const Color = @import("renderer/Color.zig");
 pub const ScenePass = @import("renderer/ScenePass.zig");
 pub const UiPass = @import("renderer/UiPass.zig");
 pub const RenderTarget = @import("renderer/RenderTarget.zig");
+pub const Transition = @import("renderer/Transition.zig");
 
 pub const Size = struct {
     width: usize,
@@ -75,11 +76,17 @@ pub fn createScenePass(self: *Self) ScenePass {
     return ScenePass.init(self.allocator);
 }
 
+/// Takes a render pass and executes it.
+/// Will take one of the following types:
+/// - UiPass
+/// - ScenePass
+/// - Transition
 pub fn submit(self: *Self, render_target: RenderTarget, pass: anytype) !void {
     const T = @TypeOf(pass);
     switch (T) {
         UiPass => try self.implementation.submitUiPass(render_target, pass),
         ScenePass => try self.implementation.submitScenePass(render_target, pass),
+        Transition => try self.implementation.submitTransition(render_target, pass),
 
         else => @compileError("Renderer.submit can not process " ++ @typeName(T) ++ "!"),
     }

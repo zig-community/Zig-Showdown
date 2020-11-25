@@ -1,0 +1,11 @@
+# Blender MTL File: 'blocked.blend'
+# Material Count: 3
+
+newmtl ceiling
+map_Kd Textures/ceiling.png
+
+newmtl floor
+map_Kd Textures/floor.png
+
+newmtl wall
+map_Kd Textures/wall.png

@@ -128,13 +128,13 @@ pub fn main() anyerror!u8 {
                 // TODO: This is a horrible hack and requires
                 // actual key codes from ZWL. Good enough to debug though
                 const button: ?Input.Button = switch (ev.scancode) {
-                    25, 111 => .up, // W, ↑
-                    39, 116 => .down, // S, ↓
-                    38, 113 => .left, // A, ←
-                    40, 114 => .right, // D, →
-                    65 => .jump, // space
-                    36 => .accept, // return
-                    9, 22 => .back, // escape, backspace
+                    17, 103 => .up, // W, ↑
+                    31, 108 => .down, // S, ↓
+                    30, 105 => .left, // A, ←
+                    32, 106 => .right, // D, →
+                    57 => .jump, // space
+                    28 => .accept, // return
+                    1, 14 => .back, // escape, backspace
                     else => blk: {
                         std.log.scoped(.input).info("unknown scancode: {}", .{ev.scancode});
                         break :blk null;

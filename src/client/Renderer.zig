@@ -4,7 +4,7 @@ const build_options = @import("build_options");
 
 const ui = @import("ui.zig");
 
-const WindowPlatform = @import("root").WindowPlatform;
+const WindowPlatform = @import("main.zig").WindowPlatform;
 const Resources = @import("Resources.zig");
 
 const Self = @This();

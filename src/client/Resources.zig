@@ -1,7 +1,7 @@
 const std = @import("std");
 const res = @import("resource_pool.zig");
 
-pub const Renderer = @import("root").Renderer;
+pub const Renderer = @import("Renderer.zig");
 pub const Model = @import("resources/Model.zig");
 pub const Texture = @import("resources/Texture.zig");
 pub const Font = @import("resources/Font.zig");

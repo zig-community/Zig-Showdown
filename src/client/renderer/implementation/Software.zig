@@ -10,7 +10,7 @@ const painterz = @import("painterz");
 const draw = @import("pixel_draw");
 const math = @import("../../math.zig");
 
-const WindowPlatform = @import("root").WindowPlatform;
+const WindowPlatform = @import("../../main.zig").WindowPlatform;
 
 const Color = @import("../Color.zig");
 

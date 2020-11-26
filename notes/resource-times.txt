@@ -1,0 +1,18 @@
+
+
+base stat:
+  linux: time to first image: 91345 µs
+  wine:  time to first image: 231273 µs
+
+file mapping:
+  linux: ???
+  wine:  ???
+
+persistent memory + removed safety duplications:
+  linux: time to first image: 75806 µs
+  wine:  time to first image: 95285 µs
+
+file mapping + persistent memory + removed safety duplications:
+  linux: time to first image: 59645 µs
+  wine:  ???
+

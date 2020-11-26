@@ -94,7 +94,8 @@ pub fn endFrame(self: *Self) !void {
 fn getPixBuf(self: *Self, rt: Renderer.RenderTarget) zwl.PixelBuffer {
     return if (rt.backing_texture) |tex|
         zwl.PixelBuffer{
-            .data = @ptrCast([*]u32, tex.pixels.ptr),
+            // RenderTarget always have mutData()
+            .data = @ptrCast([*]u32, (tex.mutData() catch unreachable).ptr),
             .width = @intCast(u16, tex.width),
             .height = @intCast(u16, tex.height),
         }
@@ -132,7 +133,8 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
             const y = std.math.cast(usize, iy) catch return null;
             if (x >= data.font.texture.width or y >= data.font.texture.height) return null;
 
-            return if (data.font.texture.pixels[data.font.texture.width * y + x].a >= 0x80)
+            const pixels = data.font.texture.data();
+            return if (pixels[data.font.texture.width * y + x].a >= 0x80)
                 data.color
             else
                 null;
@@ -143,14 +145,15 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
             const y = std.math.cast(usize, iy) catch return null;
             if (x >= font.width or y >= font.height) return null;
 
-            if (font.pixels[font.width * y + x].a < 0x80)
+            const pixels = font.data();
+            if (pixels[font.width * y + x].a < 0x80)
                 return null;
 
             return Color{
-                .r = font.pixels[font.width * y + x].r,
-                .g = font.pixels[font.width * y + x].g,
-                .b = font.pixels[font.width * y + x].b,
-                .a = font.pixels[font.width * y + x].a,
+                .r = pixels[font.width * y + x].r,
+                .g = pixels[font.width * y + x].g,
+                .b = pixels[font.width * y + x].b,
+                .a = pixels[font.width * y + x].a,
             };
         }
     };
@@ -310,9 +313,30 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
 
 pub fn submitTransition(self: *Self, render_target: Renderer.RenderTarget, transition: Renderer.Transition) !void {
     const Impl = struct {
+        const PixelView = struct {
+            const PV = @This();
+
+            data: [*]const u32,
+            // todo: format as well
+            width: u16,
+            height: u16,
+
+            pub inline fn setPixel(pv: PV, x: usize, y: usize, color: Pixel) void {
+                pv.data[pv.width * y + x] = @bitCast(u32, color);
+            }
+
+            pub inline fn getPixel(pv: PV, x: usize, y: usize) Pixel {
+                return @bitCast(Pixel, self.data[pv.width * y + x]);
+            }
+
+            pub fn span(pv: PV) []const u32 {
+                return pv.data[0 .. @as(usize, pv.width) * @as(usize, pv.height)];
+            }
+        };
+
         /// Renders a transition between `src_from` and `src_to` with `progress` percent between `0.0` and `1.0` using
         /// the given transition
-        pub fn render(src_from: zwl.PixelBuffer, src_to: zwl.PixelBuffer, dest: zwl.PixelBuffer, progress: f32, style: Renderer.Transition.Style) void {
+        pub fn render(src_from: PixelView, src_to: PixelView, dest: zwl.PixelBuffer, progress: f32, style: Renderer.Transition.Style) void {
             std.debug.assert(src_from.width == src_to.width);
             std.debug.assert(src_from.width == dest.width);
             std.debug.assert(src_from.height == src_to.height);
@@ -397,16 +421,16 @@ pub fn submitTransition(self: *Self, render_target: Renderer.RenderTarget, trans
 
     const target_pixbuf = self.getPixBuf(render_target);
 
-    var pix_from = zwl.PixelBuffer{
+    var pix_from = Impl.PixelView{
         .width = @intCast(u16, transition.from.width),
         .height = @intCast(u16, transition.from.height),
-        .data = @ptrCast([*]u32, transition.from.pixels.ptr),
+        .data = @ptrCast([*]const u32, transition.from.data().ptr),
     };
 
-    var pix_to = zwl.PixelBuffer{
+    var pix_to = Impl.PixelView{
         .width = @intCast(u16, transition.to.width),
         .height = @intCast(u16, transition.to.height),
-        .data = @ptrCast([*]u32, transition.to.pixels.ptr),
+        .data = @ptrCast([*]const u32, transition.to.data().ptr),
     };
 
     Impl.render(

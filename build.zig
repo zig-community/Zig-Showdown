@@ -194,6 +194,7 @@ pub fn build(b: *std.build.Builder) !void {
         test_client.addBuildOption(State, "initial_state", initial_state);
         test_client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
         test_client.addBuildOption(u16, "default_port", default_port);
+        test_client.addBuildOption(RenderBackend, "render_backend", render_backend);
 
         test_client.setTarget(target);
         test_client.setBuildMode(mode);

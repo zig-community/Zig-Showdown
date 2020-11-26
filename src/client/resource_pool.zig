@@ -43,6 +43,8 @@ pub const Error = error{ OutOfMemory, InvalidData };
 /// Each bit represents a certain usage type
 pub const Mask = u64;
 
+pub const BufferView = MappingOfFile.View;
+
 /// A resource manager for a given type.
 /// Resources are obtained via a resource name (string identifier)
 /// and will be alive until no one referenced them anymore.
@@ -50,7 +52,7 @@ pub const Mask = u64;
 pub fn ResourcePool(
     comptime T: type,
     comptime Context: type,
-    loadFn: fn (ctx: Context, allocator: *std.mem.Allocator, buffer: []const u8, extension_hint: []const u8) Error!T,
+    loadFn: fn (ctx: Context, allocator: *std.mem.Allocator, buffer: BufferView, extension_hint: []const u8) Error!T,
     freeFn: fn (ctx: Context, allocator: *std.mem.Allocator, self: *T) void,
 ) type {
     return struct {
@@ -67,6 +69,7 @@ pub fn ResourcePool(
         const ManagedResource = struct {
             usage: Mask,
             resource: Resource,
+            file_mapping: MappingOfFile,
         };
         const ManagedResourceMap = std.ArrayHashMapUnmanaged(
             ResourceName,
@@ -113,6 +116,7 @@ pub fn ResourcePool(
         pub fn deinit(self: *Self) void {
             for (self.resources.items()) |*item| {
                 freeFn(self.context, self.allocator, &item.value.resource);
+                item.value.file_mapping.deinit();
             }
 
             self.resource_names.deinit(self.allocator);
@@ -152,6 +156,7 @@ pub fn ResourcePool(
                     // delete all unused resources
                     var old_entry = self.resources.remove(items[i].key) orelse unreachable;
                     freeFn(self.context, self.allocator, &old_entry.value.resource);
+                    old_entry.value.file_mapping.deinit();
                     len -= 1; // swapRemove keeps the next item at `i`, but reduces length
                 } else {
                     // keep iterating
@@ -184,21 +189,17 @@ pub fn ResourcePool(
                         break kv.key;
                 } else @panic("get received an invalid name from the programmer. This is a bug!");
 
-                std.debug.assert(file_name.len > 0 and file_name[0] == '/');
-
-                const buffer = try std.fs.cwd().readFileAlloc(
-                    self.allocator,
-                    file_name[1..],
-                    100 * 1024 * 1024, // 100MB per resource should be enough *for now*
-                );
-                defer self.allocator.free(buffer);
+                // TODO: Change directory handle to the path of the exe, not the CWD
+                var file_map = try MappingOfFile.init(self.allocator, std.fs.cwd(), file_name);
+                errdefer file_map.deinit();
 
                 gopr.entry.value = ManagedResource{
+                    .file_mapping = file_map,
                     .usage = 0,
                     .resource = try loadFn(
                         self.context,
                         self.allocator,
-                        buffer,
+                        file_map.data,
                         filePathExtension(file_name),
                     ),
                 };
@@ -228,6 +229,91 @@ fn filePathExtension(path: []const u8) []const u8 {
     else
         "";
 }
+
+/// Provides features to map a file into memory quickly
+const MappingOfFile = if (std.builtin.endian == .Big)
+    platform_impls.Fake // we need to be able to change the data on big endian platforms
+else switch (std.builtin.os.tag) {
+    .linux, .macos, .openbsd, .freebsd => platform_impls.Unix,
+    .windows => platform_impls.Fake, // TODO: replace with .Windows
+    else => @compileError("No implementation for MappingOfFile for this OS!"),
+};
+
+const platform_impls = struct {
+    const Windows = struct {
+        const Self = @This();
+        pub const View = []const u8;
+    };
+    const Unix = struct {
+        const Self = @This();
+        pub const View = []align(std.mem.page_size) const u8;
+
+        allocator: *std.mem.Allocator,
+        data: View,
+
+        pub fn init(allocator: *std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !Self {
+            std.debug.assert(path.len > 1 and path[0] == '/');
+
+            var file = try dir.openFile(path[1..], .{
+                .intended_io_mode = .blocking,
+                .read = true,
+                .write = false,
+            });
+            defer file.close();
+
+            const file_len = try std.math.cast(usize, try file.getEndPos());
+            const mapped_mem = try std.os.mmap(
+                null,
+                file_len,
+                std.os.PROT_READ,
+                std.os.MAP_SHARED,
+                file.handle,
+                0,
+            );
+            errdefer std.os.munmap(mapped_mem);
+
+            return Self{
+                .allocator = allocator,
+                .data = mapped_mem,
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            errdefer std.os.munmap(self.data);
+            self.* = undefined;
+        }
+    };
+
+    /// This is actually the classic way of providing a file view:
+    /// Load the file via read() into memory and keep it there.
+    const Fake = struct {
+        const Self = @This();
+        pub const View = []u8;
+
+        allocator: *std.mem.Allocator,
+        data: []u8,
+
+        pub fn init(allocator: *std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !Self {
+            std.debug.assert(path.len > 1 and path[0] == '/');
+            const buffer = try dir.readFileAlloc(
+                allocator,
+                path[1..],
+                100 * 1024 * 1024, // 100MB per resource should be enough *for now*
+            );
+            errdefer self.allocator.free(buffer);
+
+            return Self{
+                .allocator = allocator,
+                .data = buffer,
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.allocator.free(self.data);
+            self.* = undefined;
+        }
+    };
+};
 
 test "ResourceManager" {
     const R = struct {

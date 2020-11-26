@@ -29,6 +29,8 @@ pub const Renderer = @import("Renderer.zig");
 pub fn main() anyerror!u8 {
     defer _ = gpa.deinit();
 
+    var boottime_timer: ?std.time.Timer = try std.time.Timer.start();
+
     try network.init();
     defer network.deinit();
 
@@ -97,6 +99,7 @@ pub fn main() anyerror!u8 {
             .WindowDestroyed, .ApplicationTerminated => break :main_loop,
 
             .WindowVBlank => {
+
                 // Lockstep updates with renderer for now
                 {
                     const update_delta = @intToFloat(f32, update_timer.lap()) / std.time.ns_per_s;
@@ -111,6 +114,11 @@ pub fn main() anyerror!u8 {
                     const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
                     try game.render(&renderer, stretch_factor * render_delta);
                     try renderer.endFrame();
+                }
+
+                if (boottime_timer) |timer| {
+                    std.debug.print("time to first image: {} µs\n", .{timer.read() / 1000});
+                    boottime_timer = null;
                 }
             },
 

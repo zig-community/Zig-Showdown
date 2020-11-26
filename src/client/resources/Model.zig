@@ -74,7 +74,7 @@ pub fn deinit(renderer: *Renderer, allocator: *std.mem.Allocator, self: *Self) v
     self.* = undefined;
 }
 
-pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_data: []const u8, hint: []const u8) resource_pool.Error!Self {
+pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_data: resource_pool.BufferView, hint: []const u8) resource_pool.Error!Self {
 
     // CHANGES IN HERE MUST BE REFLECTED IN
     // src/tools/obj-conv.zig
@@ -116,7 +116,7 @@ pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_da
     // big-endian platforms
     // TODO: This can be omitted if we use mmap/@embedFile and
     // keep the data alive in the pool itself.
-    var data = try model.arena.allocator.dupe(u8, raw_data[0x30..]);
+    var data = raw_data[0x30..]; // try model.arena.allocator.dupe(u8, );
 
     model.vertices = std.mem.bytesAsSlice(
         Vertex,

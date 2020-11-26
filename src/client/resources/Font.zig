@@ -17,7 +17,7 @@ pub fn deinit(renderer: *Renderer, allocator: *std.mem.Allocator, self: *Self) v
     self.* = undefined;
 }
 
-pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_data: []const u8, hint: []const u8) resource_pool.Error!Self {
+pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_data: resource_pool.BufferView, hint: []const u8) resource_pool.Error!Self {
     var tex = try Texture.loadFromMemory(renderer, allocator, raw_data, hint);
     errdefer Texture.deinit(renderer, allocator, &tex);
 

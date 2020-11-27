@@ -22,3 +22,6 @@
 [submodule "deps/stb"]
 	path = deps/stb
 	url = https://github.com/nothings/stb
+[submodule "deps/zzz"]
+	path = deps/zzz
+	url = https://github.com/gruebite/zzz

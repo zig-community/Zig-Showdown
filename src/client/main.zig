@@ -2,11 +2,13 @@ const std = @import("std");
 const network = @import("network");
 const args = @import("args");
 const zwl = @import("zwl");
+const zzz = @import("zzz");
 
 const Game = @import("Game.zig");
 const Input = @import("Input.zig");
 
 const Resources = @import("Resources.zig");
+const ConfigFile = @import("ConfigFile.zig");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
@@ -48,6 +50,36 @@ pub fn main() anyerror!u8 {
         return 0;
     }
 
+    const config = cli.options.@"config-file" orelse "showdown.conf";
+
+    // Do not use this for allocation, it is only a placeholder
+    // to be replaced by the zzz parser.
+    var config_buffer_arena = std.heap.ArenaAllocator.init(global_allocator);
+    defer config_buffer_arena.deinit();
+
+    var config_file: ConfigFile = if (std.fs.cwd().readFileAlloc(global_allocator, config, 500_000)) |file_buffer| blk: {
+        defer global_allocator.free(file_buffer);
+
+        var tree = zzz.ZTree(10, 100){};
+
+        var node = try tree.appendText(file_buffer);
+
+        node.convertStrings();
+
+        // for debugging:
+        // tree.show();
+
+        var cfg = try node.imprintAlloc(ConfigFile, global_allocator);
+
+        config_buffer_arena.deinit();
+        config_buffer_arena = cfg.arena;
+
+        break :blk cfg.result;
+    } else |err| switch (err) {
+        error.FileNotFound => ConfigFile{}, // Just use the default values here
+        else => |e| return e,
+    };
+
     // Do not init windowing before necessary. We don't need a window
     // for printing a help string.
 
@@ -56,8 +88,8 @@ pub fn main() anyerror!u8 {
 
     var window = try platform.createWindow(.{
         .title = "Zig SHOWDOWN",
-        .width = 1280,
-        .height = 720,
+        .width = config_file.video.resolution[0],
+        .height = config_file.video.resolution[1],
         .resizeable = false,
         .track_damage = false,
         .visible = true,
@@ -182,9 +214,12 @@ const CliArgs = struct {
 
     @"time-stretch": f32 = 1.0,
 
+    @"config-file": ?[]const u8 = null,
+
     pub const shorthands = .{
         .f = "fullscreen",
         .h = "help",
+        .c = "config-file",
     };
 };
 
@@ -198,6 +233,7 @@ fn printUsage(writer: anytype) !void {
         \\                           will run with half the speed.
         \\  -p, --port=PORT          Changes the port used for the game server to PORT.
         \\  -f, --fullscreen=FULL    Will run the game in fullscreen mode when FULL = true.
+        \\  -c, --config-file=CFG    Uses a different config file than the default one (showdown.conf)
         \\
     );
 }

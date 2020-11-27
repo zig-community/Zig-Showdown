@@ -38,6 +38,11 @@ const pkgs = struct {
             zlm,
         },
     };
+
+    const zzz = std.build.Pkg{
+        .name = "zzz",
+        .path = "./deps/zzz/src/main.zig",
+    };
 };
 
 const State = enum {
@@ -73,6 +78,7 @@ fn addClientPackages(exe: *std.build.LibExeObjStep) void {
     exe.addPackage(pkgs.zwl);
     exe.addPackage(pkgs.painterz);
     exe.addPackage(pkgs.zlm);
+    exe.addPackage(pkgs.zzz);
 }
 
 pub fn build(b: *std.build.Builder) !void {

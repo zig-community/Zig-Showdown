@@ -105,13 +105,14 @@ pub fn screen(self: *Self) RenderTarget {
 
 /// Creates a new in-memory texture.
 pub fn createRenderTarget(self: *Self, size: ?Size) !RenderTarget {
+    const window_size = self.window.getSize();
     return RenderTarget{
         .renderer = self,
         .backing_texture = try Resources.Texture.create(
             self,
             self.allocator,
-            if (size) |s| s.width else 1280, // TODO: THIS IS NOT GOOD
-            if (size) |s| s.height else 720, // TODO: THIS IS NOT GOOD
+            if (size) |s| s.width else window_size[0],
+            if (size) |s| s.height else window_size[1],
         ),
     };
 }

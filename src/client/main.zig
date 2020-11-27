@@ -157,21 +157,15 @@ pub fn main() anyerror!u8 {
             .WindowDamaged => {}, // ignore this
 
             .KeyUp, .KeyDown => |ev| {
-                // TODO: This is a horrible hack and requires
-                // actual key codes from ZWL. Good enough to debug though
-                const button: ?Input.Button = switch (ev.scancode) {
-                    17, 103 => .up, // W, ↑
-                    31, 108 => .down, // S, ↓
-                    30, 105 => .left, // A, ←
-                    32, 106 => .right, // D, →
-                    57 => .jump, // space
-                    28 => .accept, // return
-                    1, 14 => .back, // escape, backspace
-                    else => blk: {
-                        std.log.scoped(.input).info("unknown scancode: {}", .{ev.scancode});
-                        break :blk null;
-                    },
-                };
+                const button: ?Input.Button = blk: inline for (std.meta.fields(Input.Button)) |fld| {
+                    // ignore mouse buttons
+                    if (!comptime std.mem.eql(u8, fld.name, "left_mouse")) {
+                        for (@field(config_file.keymap, fld.name)) |scancode| {
+                            if (ev.scancode == scancode)
+                                break :blk @field(Input.Button, fld.name);
+                        }
+                    }
+                } else null;
 
                 if (button) |btn| {
                     input.updateButton(btn, event == .KeyDown);

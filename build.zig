@@ -1,4 +1,5 @@
 const std = @import("std");
+const vkgen = @import("deps/vulkan-zig/generator/index.zig");
 
 const pkgs = struct {
     const network = std.build.Pkg{
@@ -45,6 +46,8 @@ const pkgs = struct {
     };
 };
 
+const vk_xml_path = "deps/Vulkan-Docs/xml/vk.xml";
+
 const State = enum {
     create_server,
     create_sp_game,
@@ -71,14 +74,28 @@ const RenderBackend = enum {
     vulkan_rt,
 };
 
-fn addClientPackages(exe: *std.build.LibExeObjStep) void {
+fn addClientPackages(exe: *std.build.LibExeObjStep, render_backend: RenderBackend, gen_vk: *vkgen.VkGenerateStep) void {
     exe.addPackage(pkgs.network);
     exe.addPackage(pkgs.args);
-    exe.addPackage(pkgs.pixel_draw);
     exe.addPackage(pkgs.zwl);
-    exe.addPackage(pkgs.painterz);
     exe.addPackage(pkgs.zlm);
     exe.addPackage(pkgs.zzz);
+    exe.addPackage(pkgs.pixel_draw); // TODO: Move to .software
+
+    switch (render_backend) {
+        .vulkan, .vulkan_rt => {
+            exe.step.dependOn(&gen_vk.step);
+            exe.addPackage(gen_vk.package);
+            exe.linkLibC();
+        },
+        .software => {
+            exe.addPackage(pkgs.painterz);
+        },
+        .opengl_es => {
+            // TODO
+            unreachable;
+        },
+    }
 }
 
 pub fn build(b: *std.build.Builder) !void {
@@ -105,6 +122,8 @@ pub fn build(b: *std.build.Builder) !void {
         "renderer",
         "Selects the rendering backend which the game should use to render",
     ) orelse .software;
+
+    const gen_vk = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig");
 
     {
         const obj_conv = b.addExecutable("obj-conv", "src/tools/obj-conv.zig");
@@ -147,7 +166,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
-        addClientPackages(client);
+        addClientPackages(client, render_backend, gen_vk);
 
         client.addBuildOption(State, "initial_state", initial_state);
         client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
@@ -195,7 +214,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const test_client = b.addTest("src/client/main.zig");
-        addClientPackages(test_client);
+        addClientPackages(test_client, render_backend, gen_vk);
 
         test_client.addBuildOption(State, "initial_state", initial_state);
         test_client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);

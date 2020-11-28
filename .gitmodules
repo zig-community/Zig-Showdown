@@ -25,3 +25,9 @@
 [submodule "deps/zzz"]
 	path = deps/zzz
 	url = https://github.com/gruebite/zzz
+[submodule "deps/vulkan-zig"]
+	path = deps/vulkan-zig
+	url = https://github.com/Snektron/vulkan-zig
+[submodule "deps/Vulkan-Docs"]
+	path = deps/Vulkan-Docs
+	url = https://github.com/KhronosGroup/Vulkan-Docs

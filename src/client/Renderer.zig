@@ -12,6 +12,7 @@ const Self = @This();
 const Implementation = switch (build_options.render_backend) {
     .software => @import("renderer/implementation/Software.zig"),
     .vulkan => @import("renderer/implementation/vulkan/Vulkan.zig"),
+    .opengl => @import("renderer/implementation/OpenGL.zig"),
     else => @compileError("The render backend " ++ @tagName(build_options.render_backend) ++ " is not implemented yet!"),
 };
 

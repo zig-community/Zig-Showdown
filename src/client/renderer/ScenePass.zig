@@ -1,11 +1,12 @@
 const std = @import("std");
+const zlm = @import("zlm");
 
 const Resources = @import("../Resources.zig");
+const Camera = @import("../Camera.zig");
 
 const Self = @This();
 
-// TODO: Replace .cam with an actual mat4
-pub const Transform = @import("pixel_draw").Camera3D;
+pub const Transform = zlm.Mat4;
 
 const DrawCall = union(enum) {
     model: struct {
@@ -15,6 +16,10 @@ const DrawCall = union(enum) {
 };
 
 drawcalls: std.ArrayList(DrawCall),
+camera: Camera = Camera{
+    .position = zlm.Vec3.zero,
+    .euler = zlm.Vec3.zero,
+},
 
 pub fn init(allocator: *std.mem.Allocator) Self {
     return Self{

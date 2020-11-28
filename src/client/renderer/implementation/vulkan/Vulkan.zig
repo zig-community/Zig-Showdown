@@ -35,11 +35,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
 
     // dlsym (and other dl-functions) secretly take shadow parameter - return address on stack
     // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66826
-    const loader = @call(
-        .{.modifier = .never_tail},
-        system.dlsym,
-        .{ libvulkan, "vkGetInstanceProcAddr" }
-    ) orelse return error.VkGetInstanceProcAddrNotFound;
+    const loader = @call(.{ .modifier = .never_tail }, system.dlsym, .{ libvulkan, "vkGetInstanceProcAddr" }) orelse return error.VkGetInstanceProcAddrNotFound;
 
     return Self{
         .libvulkan = libvulkan,

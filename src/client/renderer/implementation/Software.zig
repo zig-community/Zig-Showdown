@@ -303,7 +303,18 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
                             .texture = texture.toPixelDraw(),
                         };
 
-                        b.drawMesh(temp_mesh, .Texture, drawcall.transform);
+                        b.drawMesh(temp_mesh, .Texture, draw.Camera3D{
+                            .pos = .{
+                                .x = pass.camera.position.x,
+                                .y = pass.camera.position.y,
+                                .z = pass.camera.position.z,
+                            },
+                            .rotation = .{
+                                .x = pass.camera.euler.x,
+                                .y = pass.camera.euler.y,
+                                .z = pass.camera.euler.z,
+                            },
+                        });
                     }
                 }
             },

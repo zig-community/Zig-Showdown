@@ -7,25 +7,23 @@
 //! - optional: Announce the game via UDP broadcast to LAN
 
 const std = @import("std");
-const draw = @import("pixel_draw");
+const zlm = @import("zlm");
 
 const Self = @This();
 const Game = @import("../Game.zig");
 const Resources = @import("../Resources.zig");
 const Input = @import("../Input.zig");
 const Renderer = @import("../Renderer.zig");
+const Camera = @import("../Camera.zig");
 
 allocator: *std.mem.Allocator,
 resources: *Resources,
 
 level_model_id: Resources.ModelPool.ResourceName,
 
-cam: draw.Camera3D = .{
-    .pos = .{
-        .x = 0.0,
-        .y = 0.5,
-        .z = 0.0,
-    },
+cam: Camera = .{
+    .position = zlm.vec3(0.0, 0.5, 0.0),
+    .euler = zlm.vec3(0, 0, 0),
 },
 
 pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
@@ -50,34 +48,33 @@ pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void
         Game.fromComponent(self).switchToState(.main_menu);
     }
 
-    self.cam.rotation.x = std.math.clamp(
-        self.cam.rotation.x - input.axis(.look_vertical),
+    self.cam.euler.x = std.math.clamp(
+        self.cam.euler.x - input.axis(.look_vertical),
         -0.45 * std.math.pi,
         0.45 * std.math.pi,
     );
-    self.cam.rotation.y += input.axis(.look_horizontal);
+    self.cam.euler.y += input.axis(.look_horizontal);
 
-    var camera_forward = draw.eulerAnglesToDirVector(self.cam.rotation);
-    camera_forward.y = 0;
-    var camera_right = draw.eulerAnglesToDirVector(draw.vector_math.Vec3.c(self.cam.rotation.x, self.cam.rotation.y - 3.1415926535 * 0.5, self.cam.rotation.z));
-    camera_right.y = 0;
+    const camera_forward = self.cam.getForward();
+    const camera_right = self.cam.getRight();
 
     const input_x = input.axis(.move_horizontal);
-    const input_z = -input.axis(.move_vertical);
+    const input_z = input.axis(.move_vertical);
 
-    camera_forward = draw.vector_math.Vec3_mul_F(camera_forward, input_z);
-    camera_right = draw.vector_math.Vec3_mul_F(camera_right, input_x);
-
-    var camera_delta_p = draw.vector_math.Vec3_add(camera_forward, camera_right);
-    camera_delta_p = draw.vector_math.Vec3_normalize(camera_delta_p);
-    camera_delta_p = draw.vector_math.Vec3_mul_F(camera_delta_p, 1.0 * delta_time);
-
-    self.cam.pos = draw.vector_math.Vec3_add(self.cam.pos, camera_delta_p);
+    self.cam.position = self.cam.position.add(
+        zlm.Vec3.add(
+            camera_forward.scale(input_z),
+            camera_right.scale(input_x),
+        ).normalize().scale(1.0 * delta_time),
+    );
 }
 
 pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTarget, total_time: f32, delta_time: f32) !void {
     var pass = Renderer.ScenePass.init(self.allocator);
     defer pass.deinit();
+
+    // This is still horribly unelegant. Should be added to submit…
+    pass.camera = self.cam;
 
     const level_model = try self.resources.models.get(
         self.level_model_id,
@@ -85,7 +82,7 @@ pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTa
     );
 
     // TODO: Replace .cam with an actual mat4
-    try pass.drawModel(level_model, self.cam);
+    try pass.drawModel(level_model, zlm.Mat4.identity);
 
     renderer.clear(render_target, Renderer.Color.fromRgb(0.2, 0.4, 0.6));
     try renderer.submit(render_target, pass);

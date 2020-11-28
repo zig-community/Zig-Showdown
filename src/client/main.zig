@@ -3,6 +3,7 @@ const network = @import("network");
 const args = @import("args");
 const zwl = @import("zwl");
 const zzz = @import("zzz");
+const build_options = @import("build_options");
 
 const Game = @import("Game.zig");
 const Input = @import("Input.zig");
@@ -19,8 +20,13 @@ pub const WindowPlatform = zwl.Platform(.{
         .wayland = false,
         .windows = (std.builtin.os.tag == .windows),
     },
+    .backends_enabled = .{
+        // TODO: Extend this checks
+        .software = (build_options.render_backend == .software),
+        .opengl = (build_options.render_backend == .opengl),
+        .vulkan = (build_options.render_backend == .vulkan),
+    },
     .single_window = false,
-    .render_software = true,
     .x11_use_xcb = false,
 });
 

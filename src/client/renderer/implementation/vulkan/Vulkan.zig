@@ -5,9 +5,10 @@ const WindowPlatform = @import("../../../main.zig").WindowPlatform;
 const Renderer = @import("../../../Renderer.zig");
 const Color = @import("../../Color.zig");
 const Instance = @import("Instance.zig");
+const Device = @import("Device.zig");
 const system = std.os.system;
 const Allocator = std.mem.Allocator;
-const log = std.log.scoped(.vulkan);
+pub const log = std.log.scoped(.vulkan);
 
 const Self = @This();
 
@@ -20,12 +21,17 @@ const app_info = vk.ApplicationInfo{
 };
 
 const instance_extensions = [_][*:0]const u8{
-    "VK_KHR_surface",
+    vk.extension_info.khr_surface.name,
     // TODO: Extend with platform types
+};
+
+const device_extensions = [_][*:0]const u8{
+    vk.extension_info.khr_swapchain.name,
 };
 
 libvulkan: std.DynLib,
 instance: Instance,
+device: Device,
 
 pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
     log.info("Initializing Vulkan rendering backend", .{});
@@ -41,21 +47,35 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
         return error.SymbolNotFound;
     };
 
-    log.debug("Initializing instance", .{});
-    var instance = try Instance.init(loader, &instance_extensions, app_info);
+    var instance = try Instance.init(allocator, loader, &instance_extensions, app_info);
     errdefer instance.deinit();
 
-    const pdevs = try instance.enumeratePhysicalDevices(allocator);
-    defer allocator.free(pdevs);
-    log.debug("enumeratePhysicalDevices() returned {} device(s)", .{ pdevs.len });
+    const surface = try instance.createSurface(window);
+    errdefer instance.vki.destroySurfaceKHR(instance.handle, surface, null);
+
+    const device = instance.findAndCreateDevice(allocator, .{
+        .surface = surface,
+        .required_extensions = &device_extensions,
+    }) catch |err| switch (err) {
+        error.NoSuitableDevice => {
+            log.crit("Failed to find a suitable GPU", .{});
+            return err;
+        },
+        else => return err,
+    };
+    errdefer device.deinit();
+
+    log.info("Using device '{}'", .{ device.pdev.name() });
 
     return Self{
         .libvulkan = libvulkan,
         .instance = instance,
+        .device = device,
     };
 }
 
 pub fn deinit(self: *Self) void {
+    self.device.deinit();
     self.instance.deinit();
     self.libvulkan.close();
     self.* = undefined;

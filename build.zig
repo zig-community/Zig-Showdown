@@ -187,8 +187,6 @@ pub fn build(b: *std.build.Builder) !void {
             defer walker.deinit();
 
             while (try walker.next()) |entry| {
-                const file_without_ext = if (entry.path.len > 4) entry.path[0 .. entry.path.len - 4] else "";
-
                 var extension: ?[]const u8 = null;
 
                 if (std.mem.endsWith(u8, entry.path, ".obj")) {
@@ -204,6 +202,18 @@ pub fn build(b: *std.build.Builder) !void {
                 } else {
                     continue;
                 }
+
+                const file_without_ext = if (entry.path.len > 4)
+                    if (std.builtin.os.tag == .windows) blk: {
+                        const p = try b.allocator.dupe(u8, file_without_ext);
+                        for (p) |*c| {
+                            if (c.* == '\\')
+                                c.* = '/';
+                        }
+                        break :blk p;
+                    } else entry.path[0 .. entry.path.len - 4]
+                else
+                    "";
 
                 if (embed_resources) {
                     // files are in zig-cache/../assets

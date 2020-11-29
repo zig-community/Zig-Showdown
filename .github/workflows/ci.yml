@@ -13,6 +13,7 @@ jobs:
     strategy:
       matrix:
         platform: [ubuntu-latest, macos-latest, windows-latest]
+        renderer: [software, opengl]
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -29,7 +30,7 @@ jobs:
         run: zig build test
 
       - name: Compile game binaries
-        run: zig build install
+        run: zig build -Drenderer=${{ matrix.renderer }} install
 
       - name: Compile tool binaries
         run: zig build tools

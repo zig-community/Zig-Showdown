@@ -47,4 +47,5 @@ The following build options are available:
 |----------------------|----------------|-------------------|----------------------------|
 | `default_port`       | `u16`          | 3315              | Sets the default game port |
 | `initial_state`      | `create_server`, `create_sp_game`, `credits`, `gameplay`, `join_game`, `main_menu`, `options`, `pause_menu`, `splash` | `splash` | Sets the initial state of the game, changing where the game starts. This allows improved debugging for stuff like `gameplay` or `options` where waiting for the normal game flow to finish is too long. |
-| `enable-fps-counter` | `bool`         | `true` when Debug | When `true` displays a text that shows frame time in ms and frame rate in fps. |
+| `enable-fps-counter` | `bool`         | `true` when Debug | When enabled, displays a text that shows frame time in ms and frame rate in fps. |
+| `embed-resources`    | `bool`         | `false`           | When enabled, the `assets` folder is embedded into the final executable, creating a single-file game. |

@@ -37,6 +37,8 @@ const std = @import("std");
 //!   - Would allow really fast lookups of resources (no string translation required)
 //!   - Make this the mode that is used in release modes (@embedFile the resources, don't use fs, make getName not fail at all)
 
+const resource_data = @import("showdown-resources");
+
 pub const Error = error{ OutOfMemory, InvalidData };
 
 /// Usage mask type that is used to mark usage of resources.
@@ -233,6 +235,8 @@ fn filePathExtension(path: []const u8) []const u8 {
 /// Provides features to map a file into memory quickly
 const MappingOfFile = if (std.builtin.endian == .Big)
     platform_impls.Fake // we need to be able to change the data on big endian platforms
+else if (resource_data.embedded)
+    platform_impls.Embedded
 else switch (std.builtin.os.tag) {
     .linux, .macos, .openbsd, .freebsd => platform_impls.Unix,
     .windows => platform_impls.Fake, // TODO: replace with .Windows
@@ -240,10 +244,34 @@ else switch (std.builtin.os.tag) {
 };
 
 const platform_impls = struct {
+    /// This is a platform-independent implementation of a "file mapping" where the file is embedded
+    /// into the executable itself and is not present on disk.
+    const Embedded = struct {
+        const Self = @This();
+        pub const View = []const u8;
+
+        data: []const u8,
+
+        pub fn init(allocator: *std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !Self {
+            inline for (std.meta.fields(@TypeOf(resource_data.files))) |fld| {
+                if (std.mem.eql(u8, fld.name, path))
+                    return Self{ .data = @field(resource_data.files, fld.name) };
+            }
+            return error.FileNotFound;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.* = undefined;
+        }
+    };
+
+    /// This implements the file mapping for windows.
     const Windows = struct {
         const Self = @This();
         pub const View = []const u8;
     };
+
+    /// This implements the file mapping for unix systems using mmap.
     const Unix = struct {
         const Self = @This();
         pub const View = []align(std.mem.page_size) const u8;

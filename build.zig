@@ -205,7 +205,7 @@ pub fn build(b: *std.build.Builder) !void {
 
                 const file_without_ext = if (entry.path.len > 4)
                     if (std.builtin.os.tag == .windows) blk: {
-                        const p = try b.allocator.dupe(u8, file_without_ext);
+                        const p = try b.allocator.dupe(u8, entry.path[0 .. entry.path.len - 4]);
                         for (p) |*c| {
                             if (c.* == '\\')
                                 c.* = '/';

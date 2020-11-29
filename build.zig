@@ -45,9 +45,14 @@ const pkgs = struct {
         .path = "./deps/zzz/src/main.zig",
     };
 
+    const gl = std.build.Pkg{
+        .name = "gl",
+        .path = "./deps/opengl/exports/gl_3v3.zig",
+    };
+
     const resources = std.build.Pkg{
         .name = "showdown-resources",
-        .path = "./zig-cache/resources.zig", // Write by this file
+        .path = "./zig-cache/resources.zig", // Written by this file
     };
 };
 
@@ -105,6 +110,7 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
             @panic("opengl_es is not implementated yet");
         },
         .opengl => {
+            exe.addPackage(pkgs.gl);
             if (target.isWindows()) {
                 exe.linkSystemLibrary("opengl32");
             } else {
@@ -145,7 +151,7 @@ pub fn build(b: *std.build.Builder) !void {
         "When set, the resources will be embedded into the binary.",
     ) orelse false;
 
-    if (!target.isGnuLibC() and (render_backend == .vulkan or render_backend == .opengl or render_backend == .opengl_es)) {
+    if (target.isLinux() and !target.isGnuLibC() and (render_backend == .vulkan or render_backend == .opengl or render_backend == .opengl_es)) {
         @panic("OpenGL, Vulkan and OpenGL ES require linking against glibc, musl is not supported!");
     }
 

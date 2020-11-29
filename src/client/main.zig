@@ -102,6 +102,12 @@ pub fn main() anyerror!u8 {
         .decorations = true,
         .track_mouse = true,
         .track_keyboard = true,
+        .backend = switch (build_options.render_backend) {
+            .software => .software,
+            .opengl => zwl.Backend{ .opengl = .{ .major = 3, .minor = 3 } },
+            .vulkan, .vulkan_rt => .vulkan,
+            else => @compileError("unsupported render backend!"),
+        },
     });
     defer window.deinit();
 

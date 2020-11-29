@@ -31,3 +31,6 @@
 [submodule "deps/Vulkan-Docs"]
 	path = deps/Vulkan-Docs
 	url = https://github.com/KhronosGroup/Vulkan-Docs
+[submodule "deps/opengl"]
+	path = deps/opengl
+	url = https://github.com/MasterQ32/zig-opengl.git

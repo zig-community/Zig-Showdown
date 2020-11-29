@@ -44,6 +44,11 @@ const pkgs = struct {
         .name = "zzz",
         .path = "./deps/zzz/src/main.zig",
     };
+
+    const resources = std.build.Pkg{
+        .name = "showdown-resources",
+        .path = "./zig-cache/resources.zig", // Write by this file
+    };
 };
 
 const vk_xml_path = "deps/Vulkan-Docs/xml/vk.xml";
@@ -83,6 +88,7 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
     exe.addPackage(pkgs.zwl);
     exe.addPackage(pkgs.zlm);
     exe.addPackage(pkgs.zzz);
+    exe.addPackage(pkgs.resources);
 
     switch (render_backend) {
         .vulkan, .vulkan_rt => {
@@ -133,6 +139,11 @@ pub fn build(b: *std.build.Builder) !void {
         "renderer",
         "Selects the rendering backend which the game should use to render",
     ) orelse .software;
+    const embed_resources = b.option(
+        bool,
+        "embed-resources",
+        "When set, the resources will be embedded into the binary.",
+    ) orelse false;
 
     if (!target.isGnuLibC() and (render_backend == .vulkan or render_backend == .opengl or render_backend == .opengl_es)) {
         @panic("OpenGL, Vulkan and OpenGL ES require linking against glibc, musl is not supported!");
@@ -161,22 +172,54 @@ pub fn build(b: *std.build.Builder) !void {
         const assets_step = b.step("assets", "Compiles all assets to their final format");
 
         // precompile all asset files:
+
+        var resources_list = std.ArrayList(u8).init(b.allocator);
         {
+            var writer = resources_list.writer();
+
+            try writer.writeAll("// This is auto-generated code\n\n");
+
+            try writer.print("pub const embedded = {};\n\n", .{embed_resources});
+
+            try writer.writeAll("pub const files = .{\n");
+
             var walker = try std.fs.walkPath(b.allocator, "assets");
             defer walker.deinit();
 
             while (try walker.next()) |entry| {
+                const file_without_ext = if (entry.path.len > 4) entry.path[0 .. entry.path.len - 4] else "";
+
+                var extension: ?[]const u8 = null;
+
                 if (std.mem.endsWith(u8, entry.path, ".obj")) {
                     const convert_file = obj_conv.run();
                     convert_file.addArg(entry.path);
                     assets_step.dependOn(&convert_file.step);
+                    extension = "mdl";
                 } else if (std.mem.endsWith(u8, entry.path, ".png") or std.mem.endsWith(u8, entry.path, ".tga") or std.mem.endsWith(u8, entry.path, ".bmp")) {
                     const convert_file = tex_conv.run();
                     convert_file.addArg(entry.path);
                     assets_step.dependOn(&convert_file.step);
+                    extension = "tex";
+                } else {
+                    continue;
+                }
+
+                if (embed_resources) {
+                    // files are in zig-cache/../assets
+                    try writer.print("    .@\"/{}.{}\" = @embedFile(\"../{}.{}\"),\n", .{
+                        file_without_ext, extension.?,
+                        file_without_ext, extension.?,
+                    });
+                } else {
+                    try writer.print("    .@\"/{}.{}\" = {{}},\n", .{ file_without_ext, extension.? });
                 }
             }
+
+            try writer.writeAll("};\n");
         }
+
+        try std.fs.cwd().writeFile("zig-cache/resources.zig", resources_list.items);
     }
 
     {

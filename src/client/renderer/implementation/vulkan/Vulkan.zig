@@ -45,6 +45,10 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
     var instance = try Instance.init(loader, &instance_extensions, app_info);
     errdefer instance.deinit();
 
+    const pdevs = try instance.enumeratePhysicalDevices(allocator);
+    defer allocator.free(pdevs);
+    log.debug("enumeratePhysicalDevices() returned {} device(s)", .{ pdevs.len });
+
     return Self{
         .libvulkan = libvulkan,
         .instance = instance,

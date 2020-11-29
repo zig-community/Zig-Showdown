@@ -7,6 +7,7 @@ const Color = @import("../../Color.zig");
 const Instance = @import("Instance.zig");
 const system = std.os.system;
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.vulkan);
 
 const Self = @This();
 
@@ -23,33 +24,36 @@ const instance_extensions = [_][*:0]const u8{
     // TODO: Extend with platform types
 };
 
-libvulkan: *c_void,
+libvulkan: std.DynLib,
 instance: Instance,
 
 pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
+    log.info("Initializing Vulkan rendering backend", .{});
     // TODO: Don't hardcode this, make it work on other platforms as well
-    const libvulkan = system.dlopen("/usr/lib/libvulkan.so.1", system.RTLD_LAZY) orelse {
-        return error.LibvulkanNotFound;
+    var libvulkan = std.DynLib.openZ("/usr/lib/libvulkan.so.1") catch |err| {
+        log.crit("Failed to open Vulkan shared library", .{});
+        return err;
     };
-    errdefer _ = system.dlclose(libvulkan);
+    errdefer libvulkan.close();
 
-    // dlsym (and other dl-functions) secretly take shadow parameter - return address on stack
-    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66826
-    const loader = @call(.{ .modifier = .never_tail }, system.dlsym, .{ libvulkan, "vkGetInstanceProcAddr" }) orelse return error.VkGetInstanceProcAddrNotFound;
+    const loader = libvulkan.lookup(vk.PfnGetInstanceProcAddr, "vkGetInstanceProcAddr") orelse {
+        log.crit("Failed to find vkGetInstanceProcAddr in libvulkan", .{});
+        return error.SymbolNotFound;
+    };
+
+    log.debug("Initializing instance", .{});
+    var instance = try Instance.init(loader, &instance_extensions, app_info);
+    errdefer instance.deinit();
 
     return Self{
         .libvulkan = libvulkan,
-        .instance = try Instance.init(
-            @ptrCast(vk.PfnGetInstanceProcAddr, loader),
-            &instance_extensions,
-            app_info,
-        ),
+        .instance = instance,
     };
 }
 
 pub fn deinit(self: *Self) void {
     self.instance.deinit();
-    _ = system.dlclose(self.libvulkan);
+    self.libvulkan.close();
     self.* = undefined;
 }
 

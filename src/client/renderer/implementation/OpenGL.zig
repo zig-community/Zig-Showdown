@@ -50,7 +50,7 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn beginFrame(self: *Self) void {
-    gl.clearColor(1, 0, 1, 1);
+    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 }
 
@@ -59,7 +59,13 @@ pub fn endFrame(self: *Self) !void {
 }
 
 pub fn clear(self: *Self, rt: Renderer.RenderTarget, color: Color) void {
-    // stub
+    gl.clearColor(
+        @intToFloat(f32, color.b) / 255.0,
+        @intToFloat(f32, color.g) / 255.0,
+        @intToFloat(f32, color.b) / 255.0,
+        @intToFloat(f32, color.a) / 255.0,
+    );
+    gl.clear(gl.COLOR_BUFFER_BIT);
 }
 
 pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Renderer.UiPass) !void {

@@ -47,7 +47,7 @@ const pkgs = struct {
 
     const gl = std.build.Pkg{
         .name = "gl",
-        .path = "./deps/opengl/exports/gl_3v3.zig",
+        .path = "./deps/opengl/gl_3v3_with_exts.zig",
     };
 
     const resources = std.build.Pkg{

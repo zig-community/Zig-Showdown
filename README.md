@@ -49,3 +49,19 @@ The following build options are available:
 | `initial_state`      | `create_server`, `create_sp_game`, `credits`, `gameplay`, `join_game`, `main_menu`, `options`, `pause_menu`, `splash` | `splash` | Sets the initial state of the game, changing where the game starts. This allows improved debugging for stuff like `gameplay` or `options` where waiting for the normal game flow to finish is too long. |
 | `enable-fps-counter` | `bool`         | `true` when Debug | When enabled, displays a text that shows frame time in ms and frame rate in fps. |
 | `embed-resources`    | `bool`         | `false`           | When enabled, the `assets` folder is embedded into the final executable, creating a single-file game. |
+
+### OpenGL Loader
+
+You need [zig-opengl](https://github.com/MasterQ32/zig-opengl) to regenerate the binding:
+
+```sh
+# assuming we are in the project repository:
+SHOWDOWN_ROOT=$(pwd)
+
+# Prepare the opengl generator
+cd /path/to/zig-opengl
+make generator.exe
+
+# Create our OpenGL 3.3 + GL_ARB_direct_state_access
+mono generator.exe OpenGL-Registry/xml/gl.xml $(SHOWDOWN_ROOT)/deps/opengl/gl_3v3_with_exts.zig GL_VERSION_3_3 GL_ARB_direct_state_access
+```

@@ -38,6 +38,8 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
     if (!all_available)
         return error.MissingOpenGlExtension;
 
+    try gl.GL_ARB_direct_state_access.load(window.platform, WindowPlatform.getOpenGlProcAddress);
+
     return Self{
         .window = window,
     };

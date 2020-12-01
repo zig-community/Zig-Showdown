@@ -13,11 +13,9 @@ uniform mat4 uViewProjection;
 uniform sampler2D uAlbedoTexture;
 
 void main() {
-
   position = (uWorld * vec4(vPosition,1.0)).xyz;
   normal = mat3(uWorld) * vNormal;
   uv = vTextureCoord;
 
-  // gl_Position = uViewProjection * uWorld * vec4(vPosition, 1.0);
-  gl_Position = vec4(vPosition.xy, 0.0, 1.0);
+  gl_Position = uViewProjection * uWorld * vec4(vPosition, 1.0);
 }

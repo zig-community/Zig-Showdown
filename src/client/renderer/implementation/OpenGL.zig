@@ -251,8 +251,9 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
 
     gl.clearDepth(1.0);
     gl.clear(gl.DEPTH_BUFFER_BIT);
-    // gl.enable(gl.DEPTH_TEST);
-    // defer gl.disable(gl.DEPTH_TEST);
+
+    gl.enable(gl.DEPTH_TEST);
+    defer gl.disable(gl.DEPTH_TEST);
 
     gl.bindVertexArray(self.model_vao);
 
@@ -261,17 +262,20 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
     var aspect = @intToFloat(f32, target_size.width) / @intToFloat(f32, target_size.height);
 
     var view_transform: zlm.Mat4 = zlm.Mat4.mul(
-        zlm.Mat4.createPerspective(
-            zlm.toRadians(60.0),
-            aspect,
-            0.1,
-            10_000.0,
+        zlm.Mat4.mul(
+            zlm.Mat4.createLook(
+                pass.camera.position,
+                pass.camera.getForward(),
+                zlm.vec3(0, 1, 0),
+            ),
+            zlm.Mat4.createPerspective(
+                zlm.toRadians(60.0),
+                aspect,
+                0.1,
+                10_000.0,
+            ),
         ),
-        zlm.Mat4.createLook(
-            pass.camera.position,
-            pass.camera.getForward(),
-            zlm.vec3(0, 1, 0),
-        ),
+        zlm.Mat4.createScale(-1, 1, 1),
     );
 
     const resources = Renderer.fromImplementation(self).getResources();
@@ -303,14 +307,14 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
 
                     gl.drawElements(
                         gl.TRIANGLES,
-                        @intCast(gl.GLsizei, mesh.length),
+                        @intCast(gl.GLsizei, 3 * mesh.length),
                         switch (@sizeOf(Resources.Model.Index)) {
                             1 => gl.UNSIGNED_BYTE,
                             2 => gl.UNSIGNED_SHORT,
                             4 => gl.UNSIGNED_INT,
                             else => @compileError("Invalid index type. Please use u8, u16 or u32"),
                         },
-                        null,
+                        @intToPtr([*]allowzero u8, @sizeOf(Resources.Model.Index) * 3 * mesh.offset), // calculate the correct offset for the model
                     );
                 }
             },
@@ -344,7 +348,7 @@ pub fn createTexture(self: *Self, texture: *Resources.Texture) !Texture {
         0, // x,y
         @intCast(c_int, texture.width),
         @intCast(c_int, texture.height), // size,
-        gl.BGRA,
+        gl.RGBA,
         gl.UNSIGNED_BYTE,
         texture.pixels.ptr,
     );

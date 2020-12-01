@@ -53,11 +53,19 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
     };
     var available_extensions = [1]bool{false} ** required_extensions.len;
 
-    var extensions = std.mem.tokenize(std.mem.span(gl.getString(gl.EXTENSIONS) orelse ""), " ");
-    while (extensions.next()) |extension| {
-        for (required_extensions) |req, i| {
-            if (std.mem.eql(u8, req, extension))
-                available_extensions[i] = true;
+    var num_extensions: gl.GLint = 0;
+    gl.getIntegerv(gl.NUM_EXTENSIONS, &num_extensions);
+
+    {
+        var i = num_extensions;
+        while (i > 0) {
+            i -= 1;
+
+            var extension = std.mem.span(gl.getStringi(gl.EXTENSIONS, @intCast(gl.GLuint, i)) orelse return error.OpenGlFailure);
+            for (required_extensions) |req, j| {
+                if (std.mem.eql(u8, req, extension))
+                    available_extensions[j] = true;
+            }
         }
     }
 

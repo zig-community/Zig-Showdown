@@ -122,6 +122,13 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
 }
 
 pub fn build(b: *std.build.Builder) !void {
+    // workaround for windows not having visual studio installed
+    // (makes .gnu the default target)
+    const native_target = if (std.builtin.os.tag != .windows)
+        std.zig.CrossTarget{}
+    else
+        std.zig.CrossTarget{ .abi = .gnu };
+
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
@@ -162,12 +169,14 @@ pub fn build(b: *std.build.Builder) !void {
         obj_conv.addPackage(pkgs.args);
         obj_conv.addPackage(pkgs.zlm);
         obj_conv.addPackage(pkgs.wavefront_obj);
+        obj_conv.setTarget(native_target);
         obj_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
 
         const tex_conv = b.addExecutable("tex-conv", "src/tools/tex-conv.zig");
         tex_conv.addCSourceFile("src/tools/stb_image.c", &[_][]const u8{});
         tex_conv.addIncludeDir("deps/stb");
         tex_conv.addPackage(pkgs.args);
+        tex_conv.setTarget(native_target);
         tex_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
         tex_conv.linkLibC();
 

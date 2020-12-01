@@ -102,7 +102,7 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
             exe.linkLibC();
         },
         .software => {
-            exe.addPackage(pkgs.pixel_draw); // TODO: Move to .software
+            exe.addPackage(pkgs.pixel_draw);
             exe.addPackage(pkgs.painterz);
         },
         .opengl_es => {

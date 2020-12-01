@@ -76,6 +76,6 @@ pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_da
         .data_mutable = false,
         .renderer_detail = undefined,
     };
-    tex.renderer_detail = try Renderer.details.createTexture(renderer, &tex);
+    tex.renderer_detail = Renderer.details.createTexture(renderer, &tex) catch return error.OutOfMemory;
     return tex;
 }

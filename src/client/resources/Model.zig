@@ -149,7 +149,7 @@ pub fn loadFromMemory(renderer: *Renderer, allocator: *std.mem.Allocator, raw_da
         }
     }
 
-    model.renderer_detail = try Renderer.details.createModel(renderer, &model);
+    model.renderer_detail = Renderer.details.createModel(renderer, &model) catch return error.OutOfMemory;
 
     return model;
 }

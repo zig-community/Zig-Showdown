@@ -119,6 +119,15 @@ pub fn createRenderTarget(self: *Self, size: ?Size) !RenderTarget {
     };
 }
 
+/// For a pointer to an implementation, returns the Renderer it is contained in
+pub fn fromImplementation(ptr: *Implementation) *Self {
+    return @fieldParentPtr(Self, "implementation", ptr);
+}
+
+pub fn getResources(self: Self) *Resources {
+    return self.resources orelse @panic("resources must be set before rendering!");
+}
+
 pub const details = struct {
     /// this is a internal representation of the Resources.Texture
     /// type and may be used to store the renderer-specific data structure

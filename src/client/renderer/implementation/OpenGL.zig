@@ -274,6 +274,8 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
         ),
     );
 
+    const resources = Renderer.fromImplementation(self).getResources();
+
     for (pass.drawcalls.items) |raw_drawcall| {
         switch (raw_drawcall) {
             .model => |drawcall| { // model, transform
@@ -291,17 +293,26 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
                 DSA.vertexArrayElementBuffer(self.model_vao, drawcall.model.renderer_detail.index_buffer);
                 DSA.vertexArrayVertexBuffer(self.model_vao, BIND_VERTICES, drawcall.model.renderer_detail.vertex_buffer, 0, @sizeOf(Resources.Model.Vertex));
 
-                gl.drawElements(
-                    gl.TRIANGLES,
-                    @intCast(gl.GLsizei, drawcall.model.indices.len),
-                    switch (@sizeOf(Resources.Model.Index)) {
-                        1 => gl.UNSIGNED_BYTE,
-                        2 => gl.UNSIGNED_SHORT,
-                        4 => gl.UNSIGNED_INT,
-                        else => @compileError("Invalid index type. Please use u8, u16 or u32"),
-                    },
-                    null,
-                );
+                for (drawcall.model.meshes) |mesh| {
+                    const texture = try resources.textures.get(
+                        try resources.textures.getName(mesh.texture()),
+                        Resources.usage.level_render,
+                    );
+
+                    DSA.bindTextureUnit(0, texture.renderer_detail);
+
+                    gl.drawElements(
+                        gl.TRIANGLES,
+                        @intCast(gl.GLsizei, mesh.length),
+                        switch (@sizeOf(Resources.Model.Index)) {
+                            1 => gl.UNSIGNED_BYTE,
+                            2 => gl.UNSIGNED_SHORT,
+                            4 => gl.UNSIGNED_INT,
+                            else => @compileError("Invalid index type. Please use u8, u16 or u32"),
+                        },
+                        null,
+                    );
+                }
             },
         }
     }
@@ -375,14 +386,15 @@ pub fn createModel(self: *Self, model: *Resources.Model) !Model {
 
     gl.GL_ARB_direct_state_access.namedBufferStorage(
         ids[0],
-        @intCast(isize, @sizeOf(Resources.Model.Index) * model.indices.len),
-        model.indices.ptr,
-        0,
-    );
-    gl.GL_ARB_direct_state_access.namedBufferStorage(
-        ids[1],
         @intCast(isize, @sizeOf(Resources.Model.Vertex) * model.vertices.len),
         model.vertices.ptr,
+        0,
+    );
+
+    gl.GL_ARB_direct_state_access.namedBufferStorage(
+        ids[1],
+        @intCast(isize, @sizeOf(Resources.Model.Index) * model.indices.len),
+        model.indices.ptr,
         0,
     );
 

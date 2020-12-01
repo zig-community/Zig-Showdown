@@ -267,7 +267,7 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
     // // Clear the z-buffer
     std.mem.set(f32, self.z_buffer, std.math.inf(f32));
 
-    const resources = @fieldParentPtr(Renderer, "implementation", self).resources orelse @panic("resources must be set before rendering!");
+    const resources = Renderer.fromImplementation(self).getResources();
 
     for (pass.drawcalls.items) |dc| {
         switch (dc) {

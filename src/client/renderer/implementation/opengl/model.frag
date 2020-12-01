@@ -11,5 +11,5 @@ uniform mat4 uViewProjection;
 uniform sampler2D uAlbedoTexture;
 
 void main() {
-  fragColor = vec4(1,0,0,1); //texture(uAlbedoTexture, uv);
+  fragColor = texture(uAlbedoTexture, uv);
 }

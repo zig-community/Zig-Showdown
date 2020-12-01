@@ -1025,7 +1025,7 @@ pub fn getIntegerv(_pname: GLenum, _data: [*c]GLint) void {
     return (function_pointers.glGetIntegerv orelse @panic("glGetIntegerv was not bound."))(_pname, _data);
 }
 
-pub fn getString(_name: GLenum) [*:0]const GLubyte {
+pub fn getString(_name: GLenum) ?[*:0]const GLubyte {
     return (function_pointers.glGetString orelse @panic("glGetString was not bound."))(_name);
 }
 
@@ -1777,7 +1777,7 @@ pub fn vertexAttrib4Nub(_index: GLuint, _x: GLubyte, _y: GLubyte, _z: GLubyte, _
     return (function_pointers.glVertexAttrib4Nub orelse @panic("glVertexAttrib4Nub was not bound."))(_index, _x, _y, _z, _w);
 }
 
-pub fn vertexAttrib4Nubv(_index: GLuint, _v: [*:0]const GLubyte) void {
+pub fn vertexAttrib4Nubv(_index: GLuint, _v: ?[*:0]const GLubyte) void {
     return (function_pointers.glVertexAttrib4Nubv orelse @panic("glVertexAttrib4Nubv was not bound."))(_index, _v);
 }
 
@@ -1821,7 +1821,7 @@ pub fn vertexAttrib4sv(_index: GLuint, _v: [*c]const GLshort) void {
     return (function_pointers.glVertexAttrib4sv orelse @panic("glVertexAttrib4sv was not bound."))(_index, _v);
 }
 
-pub fn vertexAttrib4ubv(_index: GLuint, _v: [*:0]const GLubyte) void {
+pub fn vertexAttrib4ubv(_index: GLuint, _v: ?[*:0]const GLubyte) void {
     return (function_pointers.glVertexAttrib4ubv orelse @panic("glVertexAttrib4ubv was not bound."))(_index, _v);
 }
 
@@ -2005,7 +2005,7 @@ pub fn vertexAttribI4sv(_index: GLuint, _v: [*c]const GLshort) void {
     return (function_pointers.glVertexAttribI4sv orelse @panic("glVertexAttribI4sv was not bound."))(_index, _v);
 }
 
-pub fn vertexAttribI4ubv(_index: GLuint, _v: [*:0]const GLubyte) void {
+pub fn vertexAttribI4ubv(_index: GLuint, _v: ?[*:0]const GLubyte) void {
     return (function_pointers.glVertexAttribI4ubv orelse @panic("glVertexAttribI4ubv was not bound."))(_index, _v);
 }
 
@@ -2089,7 +2089,7 @@ pub fn clearBufferfi(_buffer: GLenum, _drawbuffer: GLint, _depth: GLfloat, _sten
     return (function_pointers.glClearBufferfi orelse @panic("glClearBufferfi was not bound."))(_buffer, _drawbuffer, _depth, _stencil);
 }
 
-pub fn getStringi(_name: GLenum, _index: GLuint) [*:0]const GLubyte {
+pub fn getStringi(_name: GLenum, _index: GLuint) ?[*:0]const GLubyte {
     return (function_pointers.glGetStringi orelse @panic("glGetStringi was not bound."))(_name, _index);
 }
 
@@ -5508,7 +5508,7 @@ const function_signatures = struct {
     const glGetError = fn () GLenum;
     const glGetFloatv = fn (_pname: GLenum, _data: [*c]GLfloat) void;
     const glGetIntegerv = fn (_pname: GLenum, _data: [*c]GLint) void;
-    const glGetString = fn (_name: GLenum) [*:0]const GLubyte;
+    const glGetString = fn (_name: GLenum) ?[*:0]const GLubyte;
     const glGetTexImage = fn (_target: GLenum, _level: GLint, _format: GLenum, _type: GLenum, _pixels: ?*c_void) void;
     const glGetTexParameterfv = fn (_target: GLenum, _pname: GLenum, _params: [*c]GLfloat) void;
     const glGetTexParameteriv = fn (_target: GLenum, _pname: GLenum, _params: [*c]GLint) void;
@@ -5696,7 +5696,7 @@ const function_signatures = struct {
     const glVertexAttrib4Niv = fn (_index: GLuint, _v: [*c]const GLint) void;
     const glVertexAttrib4Nsv = fn (_index: GLuint, _v: [*c]const GLshort) void;
     const glVertexAttrib4Nub = fn (_index: GLuint, _x: GLubyte, _y: GLubyte, _z: GLubyte, _w: GLubyte) void;
-    const glVertexAttrib4Nubv = fn (_index: GLuint, _v: [*:0]const GLubyte) void;
+    const glVertexAttrib4Nubv = fn (_index: GLuint, _v: ?[*:0]const GLubyte) void;
     const glVertexAttrib4Nuiv = fn (_index: GLuint, _v: [*c]const GLuint) void;
     const glVertexAttrib4Nusv = fn (_index: GLuint, _v: [*c]const GLushort) void;
     const glVertexAttrib4bv = fn (_index: GLuint, _v: [*c]const GLbyte) void;
@@ -5707,7 +5707,7 @@ const function_signatures = struct {
     const glVertexAttrib4iv = fn (_index: GLuint, _v: [*c]const GLint) void;
     const glVertexAttrib4s = fn (_index: GLuint, _x: GLshort, _y: GLshort, _z: GLshort, _w: GLshort) void;
     const glVertexAttrib4sv = fn (_index: GLuint, _v: [*c]const GLshort) void;
-    const glVertexAttrib4ubv = fn (_index: GLuint, _v: [*:0]const GLubyte) void;
+    const glVertexAttrib4ubv = fn (_index: GLuint, _v: ?[*:0]const GLubyte) void;
     const glVertexAttrib4uiv = fn (_index: GLuint, _v: [*c]const GLuint) void;
     const glVertexAttrib4usv = fn (_index: GLuint, _v: [*c]const GLushort) void;
     const glVertexAttribPointer = fn (_index: GLuint, _size: GLint, _type: GLenum, _normalized: GLboolean, _stride: GLsizei, _pointer: ?*const c_void) void;
@@ -5753,7 +5753,7 @@ const function_signatures = struct {
     const glVertexAttribI4uiv = fn (_index: GLuint, _v: [*c]const GLuint) void;
     const glVertexAttribI4bv = fn (_index: GLuint, _v: [*c]const GLbyte) void;
     const glVertexAttribI4sv = fn (_index: GLuint, _v: [*c]const GLshort) void;
-    const glVertexAttribI4ubv = fn (_index: GLuint, _v: [*:0]const GLubyte) void;
+    const glVertexAttribI4ubv = fn (_index: GLuint, _v: ?[*:0]const GLubyte) void;
     const glVertexAttribI4usv = fn (_index: GLuint, _v: [*c]const GLushort) void;
     const glGetUniformuiv = fn (_program: GLuint, _location: GLint, _params: [*c]GLuint) void;
     const glBindFragDataLocation = fn (_program: GLuint, _color: GLuint, _name: [*c]const GLchar) void;
@@ -5774,7 +5774,7 @@ const function_signatures = struct {
     const glClearBufferuiv = fn (_buffer: GLenum, _drawbuffer: GLint, _value: [*c]const GLuint) void;
     const glClearBufferfv = fn (_buffer: GLenum, _drawbuffer: GLint, _value: [*c]const GLfloat) void;
     const glClearBufferfi = fn (_buffer: GLenum, _drawbuffer: GLint, _depth: GLfloat, _stencil: GLint) void;
-    const glGetStringi = fn (_name: GLenum, _index: GLuint) [*:0]const GLubyte;
+    const glGetStringi = fn (_name: GLenum, _index: GLuint) ?[*:0]const GLubyte;
     const glIsRenderbuffer = fn (_renderbuffer: GLuint) GLboolean;
     const glBindRenderbuffer = fn (_target: GLenum, _renderbuffer: GLuint) void;
     const glDeleteRenderbuffers = fn (_n: GLsizei, _renderbuffers: [*c]const GLuint) void;

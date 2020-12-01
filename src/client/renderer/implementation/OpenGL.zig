@@ -53,7 +53,7 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
     };
     var available_extensions = [1]bool{false} ** required_extensions.len;
 
-    var extensions = std.mem.tokenize(std.mem.span(gl.getString(gl.EXTENSIONS)), " ");
+    var extensions = std.mem.tokenize(std.mem.span(gl.getString(gl.EXTENSIONS) orelse ""), " ");
     while (extensions.next()) |extension| {
         for (required_extensions) |req, i| {
             if (std.mem.eql(u8, req, extension))

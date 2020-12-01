@@ -161,7 +161,7 @@ pub fn main() anyerror!u8 {
                 }
 
                 if (boottime_timer) |timer| {
-                    std.debug.print("time to first image: {} µs\n", .{timer.read() / 1000});
+                    std.log.debug("time to first image: {} µs", .{timer.read() / 1000});
                     boottime_timer = null;
                 }
             },
@@ -181,6 +181,8 @@ pub fn main() anyerror!u8 {
 
                 if (button) |btn| {
                     input.updateButton(btn, event == .KeyDown);
+                } else {
+                    std.log.info("unknown button pressed: {}", .{ev.scancode});
                 }
 
                 if (event == .KeyDown)

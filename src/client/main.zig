@@ -16,7 +16,8 @@ const global_allocator = &gpa.allocator;
 
 pub const WindowPlatform = zwl.Platform(.{
     .platforms_enabled = .{
-        .x11 = (std.builtin.os.tag == .linux),
+        .x11 = (std.builtin.os.tag == .linux and build_options.render_backend == .software),
+        .xlib = (std.builtin.os.tag == .linux and build_options.render_backend != .software),
         .wayland = false,
         .windows = (std.builtin.os.tag == .windows),
     },

@@ -114,8 +114,9 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
             if (target.isWindows()) {
                 exe.linkSystemLibrary("opengl32");
             } else {
-                // TBD
-                @panic("non-windows support is not implemented for OpenGL yet");
+                exe.linkLibC();
+                exe.linkSystemLibrary("X11");
+                exe.linkSystemLibrary("GL");
             }
         },
     }

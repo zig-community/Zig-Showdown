@@ -75,6 +75,10 @@ white_texture: gl.GLuint,
 pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
     try gl.load(window.platform, WindowPlatform.getOpenGlProcAddress);
 
+    log.info("OpenGL Version:  {}", .{std.mem.span(gl.getString(gl.VERSION))});
+    log.info("OpenGL Vendor:   {}", .{std.mem.span(gl.getString(gl.VENDOR))});
+    log.info("OpenGL Renderer: {}", .{std.mem.span(gl.getString(gl.RENDERER))});
+
     const required_extensions = [_][]const u8{
         "GL_ARB_direct_state_access",
         "GL_KHR_debug",

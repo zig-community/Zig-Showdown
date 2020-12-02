@@ -2,6 +2,7 @@ const std = @import("std");
 const zwl = @import("zwl");
 const gl = @import("gl");
 const zlm = @import("zlm");
+const ui = @import("../../ui.zig");
 
 const DSA = gl.GL_ARB_direct_state_access;
 
@@ -21,6 +22,17 @@ pub const Model = struct {
     index_buffer: gl.GLuint,
 };
 
+const UiVertex = extern struct {
+    x: i16,
+    y: i16,
+    u: f16,
+    v: f16,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+};
+
 const ModelShader = struct {
     program: gl.GLuint,
 
@@ -29,12 +41,24 @@ const ModelShader = struct {
     uAlbedoTexture: ?gl.GLint = null,
 };
 
-const VA_POSITION = 0;
-const VA_NORMAL = 1;
-const VA_UV = 2;
+const UiShader = struct {
+    program: gl.GLuint,
+
+    uScreenSize: ?gl.GLint = null,
+    uTexture: ?gl.GLint = null,
+};
+
+const VA_MDL_POSITION = 0;
+const VA_MDL_NORMAL = 1;
+const VA_MDL_UV = 2;
+
+const VA_UI_POSITION = 0;
+const VA_UI_TEXTURE = 1;
+const VA_UI_TINT = 2;
 
 const BIND_VERTICES = 0;
 
+allocator: *std.mem.Allocator,
 window: *WindowPlatform.Window,
 
 frame_buffer: gl.GLuint,
@@ -42,7 +66,11 @@ frame_buffer: gl.GLuint,
 model_vao: gl.GLuint,
 model_shader: ModelShader,
 
+ui_vao: gl.GLuint,
+ui_shader: UiShader,
+
 depth_buffer: gl.GLuint,
+white_texture: gl.GLuint,
 
 pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
     try gl.load(window.platform, WindowPlatform.getOpenGlProcAddress);
@@ -86,10 +114,10 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
     gl.enable(gl.GL_KHR_debug.DEBUG_OUTPUT);
     gl.GL_KHR_debug.debugMessageCallback(debugCallback, null);
 
-    // // And in debug builds, enable synchronous output for stack traces:
-    // if (std.builtin.mode == .Debug) {
-    //     gl.enable(gl.GL_KHR_debug.DEBUG_OUTPUT_SYNCHRONOUS);
-    // }
+    // And in debug builds, enable synchronous output for stack traces:
+    if (std.builtin.mode == .Debug) {
+        gl.enable(gl.GL_KHR_debug.DEBUG_OUTPUT_SYNCHRONOUS);
+    }
 
     const model_vao = blk: {
         var vao: gl.GLuint = 0;
@@ -98,13 +126,13 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
             return error.OpenGlFailure;
         errdefer DSA.deleteVertexArrays(1, &vao);
 
-        DSA.enableVertexArrayAttrib(vao, VA_POSITION);
-        DSA.enableVertexArrayAttrib(vao, VA_NORMAL);
-        DSA.enableVertexArrayAttrib(vao, VA_UV);
+        DSA.enableVertexArrayAttrib(vao, VA_MDL_POSITION);
+        DSA.enableVertexArrayAttrib(vao, VA_MDL_NORMAL);
+        DSA.enableVertexArrayAttrib(vao, VA_MDL_UV);
 
         DSA.vertexArrayAttribFormat(
             vao,
-            VA_POSITION,
+            VA_MDL_POSITION,
             3,
             gl.FLOAT,
             gl.FALSE,
@@ -112,7 +140,7 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
         );
         DSA.vertexArrayAttribFormat(
             vao,
-            VA_NORMAL,
+            VA_MDL_NORMAL,
             3,
             gl.BYTE,
             gl.TRUE,
@@ -120,20 +148,63 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
         );
         DSA.vertexArrayAttribFormat(
             vao,
-            VA_UV,
+            VA_MDL_UV,
             2,
             gl.FLOAT,
             gl.FALSE,
             @byteOffsetOf(Resources.Model.Vertex, "u"),
         );
 
-        DSA.vertexArrayAttribBinding(vao, VA_POSITION, BIND_VERTICES);
-        DSA.vertexArrayAttribBinding(vao, VA_NORMAL, BIND_VERTICES);
-        DSA.vertexArrayAttribBinding(vao, VA_UV, BIND_VERTICES);
+        DSA.vertexArrayAttribBinding(vao, VA_MDL_POSITION, BIND_VERTICES);
+        DSA.vertexArrayAttribBinding(vao, VA_MDL_NORMAL, BIND_VERTICES);
+        DSA.vertexArrayAttribBinding(vao, VA_MDL_UV, BIND_VERTICES);
 
         break :blk vao;
     };
     errdefer gl.deleteVertexArrays(1, &model_vao);
+
+    const ui_vao = blk: {
+        var vao: gl.GLuint = 0;
+        DSA.createVertexArrays(1, &vao);
+        if (vao == 0)
+            return error.OpenGlFailure;
+        errdefer DSA.deleteVertexArrays(1, &vao);
+
+        DSA.enableVertexArrayAttrib(vao, VA_UI_POSITION);
+        DSA.enableVertexArrayAttrib(vao, VA_UI_TEXTURE);
+        DSA.enableVertexArrayAttrib(vao, VA_UI_TINT);
+
+        DSA.vertexArrayAttribIFormat(
+            vao,
+            VA_UI_POSITION,
+            2,
+            gl.UNSIGNED_SHORT,
+            @byteOffsetOf(UiVertex, "x"),
+        );
+        DSA.vertexArrayAttribFormat(
+            vao,
+            VA_UI_TEXTURE,
+            2,
+            gl.HALF_FLOAT,
+            gl.FALSE,
+            @byteOffsetOf(UiVertex, "u"),
+        );
+        DSA.vertexArrayAttribFormat(
+            vao,
+            VA_UI_TINT,
+            4,
+            gl.UNSIGNED_BYTE,
+            gl.TRUE,
+            @byteOffsetOf(UiVertex, "r"),
+        );
+
+        DSA.vertexArrayAttribBinding(vao, VA_UI_POSITION, BIND_VERTICES);
+        DSA.vertexArrayAttribBinding(vao, VA_UI_TEXTURE, BIND_VERTICES);
+        DSA.vertexArrayAttribBinding(vao, VA_UI_TINT, BIND_VERTICES);
+
+        break :blk vao;
+    };
+    errdefer gl.deleteVertexArrays(1, &ui_vao);
 
     var model_shader = try compileShader(
         allocator,
@@ -142,6 +213,14 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
         @embedFile("opengl/model.frag"),
     );
     errdefer gl.deleteProgram(model_shader.program);
+
+    var ui_shader = try compileShader(
+        allocator,
+        UiShader,
+        @embedFile("opengl/ui.vert"),
+        @embedFile("opengl/ui.frag"),
+    );
+    errdefer gl.deleteProgram(ui_shader.program);
 
     var depth_buffer: gl.GLuint = 0;
     DSA.createRenderbuffers(1, &depth_buffer);
@@ -175,20 +254,40 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
     };
     errdefer gl.deleteFramebuffers(1, &rt_fb);
 
+    var white_texture: gl.GLuint = 0;
+    DSA.createTextures(gl.TEXTURE_2D, 1, &white_texture);
+    if (white_texture == 0)
+        return error.OpenGlFailure;
+    errdefer gl.deleteTextures(1, &white_texture);
+
+    const white_texel: u32 = 0xFFFFFFFF;
+    gl.GL_ARB_direct_state_access.textureStorage2D(white_texture, 1, gl.RGBA8, 1, 1);
+    gl.GL_ARB_direct_state_access.textureSubImage2D(white_texture, 0, 0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, &white_texel);
+
     return Self{
         .window = window,
+        .allocator = allocator,
+
+        .ui_vao = ui_vao,
+        .ui_shader = ui_shader,
+
         .model_vao = model_vao,
         .model_shader = model_shader,
+
         .frame_buffer = rt_fb,
         .depth_buffer = depth_buffer,
+        .white_texture = white_texture,
     };
 }
 
 pub fn deinit(self: *Self) void {
     gl.deleteFramebuffers(1, &self.frame_buffer);
     gl.deleteRenderbuffers(1, &self.depth_buffer);
+    gl.deleteTextures(1, &self.white_texture);
     gl.deleteProgram(self.model_shader.program);
+    gl.deleteProgram(self.ui_shader.program);
     gl.deleteVertexArrays(1, &self.model_vao);
+    gl.deleteVertexArrays(1, &self.ui_vao);
     self.* = undefined;
 }
 
@@ -244,18 +343,310 @@ fn bindRenderTarget(self: *Self, render_target: Renderer.RenderTarget) void {
 
 pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Renderer.UiPass) !void {
     self.bindRenderTarget(render_target);
+    gl.bindVertexArray(self.ui_vao);
+
+    gl.enable(gl.BLEND);
+    defer gl.disable(gl.BLEND);
+
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendEquation(gl.FUNC_ADD);
+
+    var target_size = render_target.size();
+
+    var temp_arena = std.heap.ArenaAllocator.init(self.allocator);
+    defer temp_arena.deinit();
+
+    const Segment = struct {
+        primitive_type: gl.GLenum,
+        start: usize,
+        count: usize,
+        texture: ?gl.GLuint,
+    };
+
+    const SegmentBuilder = struct {
+        vertices: std.ArrayList(UiVertex),
+        segments: std.ArrayList(Segment),
+        current_texture: ?*Resources.Texture = null,
+
+        fn segmentSize(comptime prim: gl.GLenum) usize {
+            return switch (prim) {
+                gl.LINES => 2,
+                gl.TRIANGLES => 3,
+                else => @compileError("Unsupported primitive type"),
+            };
+        }
+
+        fn texEql(a: ?gl.GLuint, b: ?gl.GLuint) bool {
+            if ((a == null) and (b == null))
+                return true;
+            if (a == null or b == null)
+                return false;
+            return a.? == b.?;
+        }
+
+        fn append(
+            list: *@This(),
+            comptime primitive_type: gl.GLenum,
+            texture: ?gl.GLuint,
+            vertices: [segmentSize(primitive_type)]UiVertex,
+        ) !void {
+            var current_segment = &list.segments.items[list.segments.items.len - 1];
+
+            if (current_segment.count > 0 and !texEql(current_segment.texture, texture)) {
+                current_segment = try list.segments.addOne();
+                current_segment.* = Segment{
+                    .primitive_type = primitive_type,
+                    .start = list.vertices.items.len,
+                    .count = 0,
+                    .texture = texture,
+                };
+            } else if (current_segment.count == 0) {
+                current_segment.primitive_type = primitive_type;
+                current_segment.texture = texture;
+            }
+
+            for (vertices) |v| {
+                try list.vertices.append(v);
+            }
+
+            current_segment.count += vertices.len;
+        }
+
+        fn blitImage(
+            builder: *@This(),
+            image: Resources.Texture,
+            dest_rectangle: ui.Rectangle,
+            src_rectangle: ?ui.Rectangle,
+            tint: ?Color,
+        ) !void {
+            const x0 = @intCast(i16, dest_rectangle.x);
+            const y0 = @intCast(i16, dest_rectangle.y);
+            const x1 = @intCast(i16, dest_rectangle.x + @intCast(isize, dest_rectangle.width) - 1);
+            const y1 = @intCast(i16, dest_rectangle.y + @intCast(isize, dest_rectangle.height) - 1);
+
+            const src_rect: ui.Rectangle = if (src_rectangle) |r| r else ui.Rectangle{
+                .x = 0,
+                .y = 0,
+                .width = image.width,
+                .height = image.height,
+            };
+
+            const u_0 = @floatCast(f16, @intToFloat(f32, src_rect.x) / @intToFloat(f32, image.width - 1));
+            const v_0 = @floatCast(f16, @intToFloat(f32, src_rect.y) / @intToFloat(f32, image.height - 1));
+            const u_1 = @floatCast(f16, @intToFloat(f32, src_rect.x + @intCast(isize, src_rect.width) - 1) / @intToFloat(f32, image.width - 1));
+            const v_1 = @floatCast(f16, @intToFloat(f32, src_rect.y + @intCast(isize, src_rect.height) - 1) / @intToFloat(f32, image.height - 1));
+
+            const c = tint orelse Color{ .r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF };
+
+            const v00 = UiVertex{
+                .x = x0,
+                .y = y0,
+                .u = u_0,
+                .v = v_0,
+                .r = c.r,
+                .g = c.g,
+                .b = c.b,
+                .a = c.a,
+            };
+            const v10 = UiVertex{
+                .x = x1,
+                .y = y0,
+                .u = u_1,
+                .v = v_0,
+                .r = c.r,
+                .g = c.g,
+                .b = c.b,
+                .a = c.a,
+            };
+
+            const v01 = UiVertex{
+                .x = x0,
+                .y = y1,
+                .u = u_0,
+                .v = v_1,
+                .r = c.r,
+                .g = c.g,
+                .b = c.b,
+                .a = c.a,
+            };
+            const v11 = UiVertex{
+                .x = x1,
+                .y = y1,
+                .u = u_1,
+                .v = v_1,
+                .r = c.r,
+                .g = c.g,
+                .b = c.b,
+                .a = c.a,
+            };
+
+            try builder.append(gl.TRIANGLES, image.renderer_detail, [3]UiVertex{ v00, v01, v10 });
+            try builder.append(gl.TRIANGLES, image.renderer_detail, [3]UiVertex{ v01, v10, v11 });
+        }
+    };
+
+    var builder = SegmentBuilder{
+        .vertices = std.ArrayList(UiVertex).init(&temp_arena.allocator),
+        .segments = std.ArrayList(Segment).init(&temp_arena.allocator),
+    };
+    try builder.segments.append(Segment{
+        .start = 0,
+        .count = 0,
+        .texture = null,
+        .primitive_type = gl.NONE,
+    });
+
+    // no need to deinit() both lists as temp_arena will free the memory
+
+    for (pass.drawcalls.items) |dc| {
+        switch (dc) {
+            .rectangle => |rectangle| {
+                // @panic("TODO: not implemented yet!");
+            },
+            .line => |line| {
+                try builder.append(gl.LINES, null, [2]UiVertex{
+                    UiVertex{
+                        .x = @intCast(i16, line.x0),
+                        .y = @intCast(i16, line.y0),
+                        .r = line.color.r,
+                        .g = line.color.g,
+                        .b = line.color.b,
+                        .a = line.color.a,
+                        .u = 0.5,
+                        .v = 0.5,
+                    },
+                    UiVertex{
+                        .x = @intCast(i16, line.x1),
+                        .y = @intCast(i16, line.y1),
+                        .r = line.color.r,
+                        .g = line.color.g,
+                        .b = line.color.b,
+                        .a = line.color.a,
+                        .u = 0.5,
+                        .v = 0.5,
+                    },
+                });
+            },
+            .polygon => |polygon| {
+                const base = UiVertex{
+                    .x = @intCast(i16, polygon.points[0].x),
+                    .y = @intCast(i16, polygon.points[0].y),
+                    .r = polygon.color.r,
+                    .g = polygon.color.g,
+                    .b = polygon.color.b,
+                    .a = polygon.color.a,
+                    .u = 0.5,
+                    .v = 0.5,
+                };
+
+                var previous = polygon.points[1];
+                for (polygon.points[2..]) |current, index| {
+                    defer previous = current;
+                    try builder.append(gl.TRIANGLES, null, [3]UiVertex{
+                        base,
+                        UiVertex{
+                            .x = @intCast(i16, previous.x),
+                            .y = @intCast(i16, previous.y),
+                            .r = polygon.color.r,
+                            .g = polygon.color.g,
+                            .b = polygon.color.b,
+                            .a = polygon.color.a,
+                            .u = 0.5,
+                            .v = 0.5,
+                        },
+                        UiVertex{
+                            .x = @intCast(i16, current.x),
+                            .y = @intCast(i16, current.y),
+                            .r = polygon.color.r,
+                            .g = polygon.color.g,
+                            .b = polygon.color.b,
+                            .a = polygon.color.a,
+                            .u = 0.5,
+                            .v = 0.5,
+                        },
+                    });
+                }
+            },
+            .image => |image| {
+                try builder.blitImage(
+                    image.image,
+                    image.dest_rectangle,
+                    image.src_rectangle,
+                    null,
+                );
+            },
+            .text => |text| {
+                for (text.string) |c, i| {
+                    try builder.blitImage(
+                        text.font.texture,
+                        ui.Rectangle{
+                            .x = text.x + @intCast(isize, text.font.glyph_size.width * i),
+                            .y = text.y,
+                            .width = text.font.glyph_size.width,
+                            .height = text.font.glyph_size.height,
+                        },
+                        ui.Rectangle{
+                            .x = @intCast(isize, text.font.glyph_size.width * (c % 16)),
+                            .y = @intCast(isize, text.font.glyph_size.height * (c / 16)),
+                            .width = text.font.glyph_size.width,
+                            .height = text.font.glyph_size.height,
+                        },
+                        text.color,
+                    );
+                }
+            },
+        }
+    }
+
+    if (builder.vertices.items.len > 0) {
+        gl.useProgram(self.ui_shader.program);
+
+        if (self.ui_shader.uScreenSize) |i|
+            gl.uniform2i(
+                i,
+                @intCast(gl.GLint, target_size.width),
+                @intCast(gl.GLint, target_size.height),
+            );
+
+        if (self.ui_shader.uTexture) |i|
+            gl.uniform1i(i, 0);
+
+        var buffer: gl.GLuint = 0;
+        DSA.createBuffers(1, &buffer);
+        if (buffer == 0)
+            return error.OpenGlFailure;
+        defer gl.deleteBuffers(1, &buffer);
+
+        gl.GL_ARB_direct_state_access.namedBufferStorage(
+            buffer,
+            @intCast(isize, @sizeOf(UiVertex) * builder.vertices.items.len),
+            builder.vertices.items.ptr,
+            0,
+        );
+
+        DSA.vertexArrayVertexBuffer(self.ui_vao, BIND_VERTICES, buffer, 0, @sizeOf(UiVertex));
+        defer DSA.vertexArrayVertexBuffer(self.ui_vao, BIND_VERTICES, 0, 0, @sizeOf(UiVertex));
+
+        for (builder.segments.items) |segment| {
+            DSA.bindTextureUnit(0, segment.texture orelse self.white_texture);
+            gl.drawArrays(
+                segment.primitive_type,
+                @intCast(gl.GLint, segment.start),
+                @intCast(gl.GLsizei, segment.count),
+            );
+        }
+    }
 }
 
 pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: Renderer.ScenePass) !void {
     self.bindRenderTarget(render_target);
+    gl.bindVertexArray(self.model_vao);
 
     gl.clearDepth(1.0);
     gl.clear(gl.DEPTH_BUFFER_BIT);
 
     gl.enable(gl.DEPTH_TEST);
     defer gl.disable(gl.DEPTH_TEST);
-
-    gl.bindVertexArray(self.model_vao);
 
     var target_size = render_target.size();
 

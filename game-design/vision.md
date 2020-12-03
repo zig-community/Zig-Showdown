@@ -14,7 +14,7 @@ The game should feature the following:
 
 On the road to the final game, all components should be written and Zig and create a nice starting point and set of libraries for other programmers to create game in Zig.
 
-Multiple rendering backends are there to exercise the windowing library and pave a way for Zig to support Vulkan, OpenGl and other rendering technologies.
+Multiple rendering backends are there to exercise the windowing library and pave a way for Zig to support Vulkan, OpenGl, Metal, DX12 and other rendering technologies.
 
 The rendering of the game is not meant to be AAA quality, but should have some basic features depending on each backend:
 - OpenGL, Vulkan: At least provide a single global shadow map for the sun, and a mirroring surface for water levels
@@ -34,3 +34,16 @@ We should at least provide 2 different levels:
   - foliage
   - skybox
   - terrain/heightmap level
+
+The game has a classic health model (100 health, weapons do different, but predictable damage, when health drops to or below 0, player dies).
+
+The game should feature various weapons and items to collect:
+- Different health kits (10, 25, 50, 100)
+- Super-Charge Mode ("quad damage")
+- Railgun (heavy damage, no spread, long reload time)
+- Melee Weapon (heavy damage, short range)
+- Shotgun (medium damage, short range, heavy spread)
+- Machine Gun (light damage, medium range, high fire rate)
+- Jetpack (allows temporary flight)
+
+Also a instagib mode should be provided for fun and easy balancing.

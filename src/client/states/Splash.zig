@@ -28,7 +28,7 @@ pub fn enter(self: *Self, total_time: f32) !void {
 }
 
 pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void {
-    if (total_time >= self.duration + 1.0 or input.isAnyHit()) {
+    if (self.progress >= 1.2 or input.isAnyHit()) {
         Game.fromComponent(self).switchToState(.main_menu);
     }
 }

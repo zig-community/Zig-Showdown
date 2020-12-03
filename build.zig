@@ -68,6 +68,7 @@ const State = enum {
     options,
     pause_menu,
     splash,
+    demo_pause,
 };
 
 const RenderBackend = enum {

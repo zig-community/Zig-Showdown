@@ -23,7 +23,10 @@ pub const Model = struct {
 };
 
 const UiVertex = extern struct {
-    x: i16,
+    // align is required to insert the correct padding for the GPU
+    // the GPU doesn't like non-16 aligned vertex data on some machines
+    // (windows 10, intel 520)
+    x: i16 align(16),
     y: i16,
     u: f16,
     v: f16,

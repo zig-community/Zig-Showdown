@@ -98,7 +98,10 @@ pub fn main() anyerror!u8 {
         .width = config_file.video.resolution[0],
         .height = config_file.video.resolution[1],
         .resizeable = false,
-        .track_damage = false,
+        .track_damage = switch (build_options.render_backend) {
+            .opengl => true,
+            else => false,
+        },
         .visible = true,
         .decorations = true,
         .track_mouse = true,
@@ -143,7 +146,7 @@ pub fn main() anyerror!u8 {
             // someone closed the window, just stop the game:
             .WindowDestroyed, .ApplicationTerminated => break :main_loop,
 
-            .WindowVBlank => {
+            .WindowDamaged, .WindowVBlank => {
 
                 // Lockstep updates with renderer for now
                 {
@@ -166,8 +169,6 @@ pub fn main() anyerror!u8 {
                     boottime_timer = null;
                 }
             },
-
-            .WindowDamaged => {}, // ignore this
 
             .KeyUp, .KeyDown => |ev| {
                 const button: ?Input.Button = blk: inline for (std.meta.fields(Input.Button)) |fld| {

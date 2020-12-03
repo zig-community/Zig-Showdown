@@ -130,7 +130,9 @@ pub fn build(b: *std.build.Builder) !void {
     else
         std.zig.CrossTarget{ .abi = .gnu };
 
-    const target = b.standardTargetOptions(.{});
+    const target = b.standardTargetOptions(.{
+        .default_target = native_target,
+    });
     const mode = b.standardReleaseOptions();
 
     const default_port = b.option(

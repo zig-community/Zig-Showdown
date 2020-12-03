@@ -45,5 +45,7 @@ The game should feature various weapons and items to collect:
 - Shotgun (medium damage, short range, heavy spread)
 - Machine Gun (light damage, medium range, high fire rate)
 - Jetpack (allows temporary flight)
+- Rocket Launcher (huge damage, slow projectiles, slow fire, low ammo)
+- Grenade Launcher (heavy damage, bouncing projectiles, quick fire, low ammo)
 
 Also a instagib mode should be provided for fun and easy balancing.

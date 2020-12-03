@@ -51,6 +51,15 @@ const UiShader = struct {
     uTexture: ?gl.GLint = null,
 };
 
+const TransitionShader = struct {
+    program: gl.GLuint,
+
+    uScreenSize: ?gl.GLint = null,
+    uFrom: ?gl.GLint = null,
+    uTo: ?gl.GLint = null,
+    uProgress: ?gl.GLint = null,
+};
+
 const VA_MDL_POSITION = 0;
 const VA_MDL_NORMAL = 1;
 const VA_MDL_UV = 2;
@@ -71,6 +80,14 @@ model_shader: ModelShader,
 
 ui_vao: gl.GLuint,
 ui_shader: UiShader,
+
+transition_vao: gl.GLuint,
+
+transition_blink: TransitionShader,
+transition_cross_fade: TransitionShader,
+transition_in_and_out: TransitionShader,
+transition_slice_bl_to_tr: TransitionShader,
+transition_slice_tr_to_bl: TransitionShader,
 
 depth_buffer: gl.GLuint,
 white_texture: gl.GLuint,
@@ -271,6 +288,45 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
     gl.GL_ARB_direct_state_access.textureStorage2D(white_texture, 1, gl.RGBA8, 1, 1);
     gl.GL_ARB_direct_state_access.textureSubImage2D(white_texture, 0, 0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, &white_texel);
 
+    // this vertex array is just there to hold *zero* information
+    // and requires no input data layout whatsoever
+    var transition_vao: gl.GLuint = 0;
+    DSA.createVertexArrays(1, &transition_vao);
+    if (transition_vao == 0)
+        return error.OpenGlFailure;
+    errdefer gl.deleteVertexArrays(1, &transition_vao);
+
+    var transition_blink = try compileShader(
+        allocator,
+        TransitionShader,
+        @embedFile("opengl/transition.vert"),
+        @embedFile("opengl/transition-blink.frag"),
+    );
+    var transition_cross_fade = try compileShader(
+        allocator,
+        TransitionShader,
+        @embedFile("opengl/transition.vert"),
+        @embedFile("opengl/transition-cross_fade.frag"),
+    );
+    var transition_in_and_out = try compileShader(
+        allocator,
+        TransitionShader,
+        @embedFile("opengl/transition.vert"),
+        @embedFile("opengl/transition-in_and_out.frag"),
+    );
+    var transition_slice_bl_to_tr = try compileShader(
+        allocator,
+        TransitionShader,
+        @embedFile("opengl/transition.vert"),
+        @embedFile("opengl/transition-slice_bl_to_tr.frag"),
+    );
+    var transition_slice_tr_to_bl = try compileShader(
+        allocator,
+        TransitionShader,
+        @embedFile("opengl/transition.vert"),
+        @embedFile("opengl/transition-slice_tr_to_bl.frag"),
+    );
+
     return Self{
         .window = window,
         .allocator = allocator,
@@ -280,6 +336,14 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
 
         .model_vao = model_vao,
         .model_shader = model_shader,
+
+        .transition_vao = transition_vao,
+
+        .transition_blink = transition_blink,
+        .transition_cross_fade = transition_cross_fade,
+        .transition_in_and_out = transition_in_and_out,
+        .transition_slice_bl_to_tr = transition_slice_bl_to_tr,
+        .transition_slice_tr_to_bl = transition_slice_tr_to_bl,
 
         .frame_buffer = rt_fb,
         .depth_buffer = depth_buffer,
@@ -293,8 +357,14 @@ pub fn deinit(self: *Self) void {
     gl.deleteTextures(1, &self.white_texture);
     gl.deleteProgram(self.model_shader.program);
     gl.deleteProgram(self.ui_shader.program);
+    gl.deleteProgram(self.transition_blink.program);
+    gl.deleteProgram(self.transition_cross_fade.program);
+    gl.deleteProgram(self.transition_in_and_out.program);
+    gl.deleteProgram(self.transition_slice_bl_to_tr.program);
+    gl.deleteProgram(self.transition_slice_tr_to_bl.program);
     gl.deleteVertexArrays(1, &self.model_vao);
     gl.deleteVertexArrays(1, &self.ui_vao);
+    gl.deleteVertexArrays(1, &self.transition_vao);
     self.* = undefined;
 }
 
@@ -642,6 +712,7 @@ pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Ren
                 @intCast(gl.GLsizei, segment.count),
             );
         }
+        DSA.bindTextureUnit(0, 0);
     }
 }
 
@@ -715,6 +786,7 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
                         @intToPtr([*]allowzero u8, @sizeOf(Resources.Model.Index) * 3 * mesh.offset), // calculate the correct offset for the model
                     );
                 }
+                DSA.bindTextureUnit(0, 0);
             },
         }
     }
@@ -722,6 +794,39 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
 
 pub fn submitTransition(self: *Self, render_target: Renderer.RenderTarget, transition: Renderer.Transition) !void {
     self.bindRenderTarget(render_target);
+
+    const target_size = render_target.size();
+
+    gl.bindVertexArray(self.transition_vao);
+
+    var shader = switch (transition.style) {
+        .blink => self.transition_blink,
+        .cross_fade => self.transition_cross_fade,
+        .in_and_out => self.transition_in_and_out,
+        .slice_bl_to_tr => self.transition_slice_bl_to_tr,
+        .slice_tr_to_bl => self.transition_slice_tr_to_bl,
+    };
+
+    gl.useProgram(shader.program);
+
+    if (shader.uScreenSize) |i|
+        gl.uniform2i(
+            i,
+            @intCast(gl.GLint, target_size.width),
+            @intCast(gl.GLint, target_size.height),
+        );
+
+    if (shader.uFrom) |i| gl.uniform1i(i, 0);
+    if (shader.uTo) |i| gl.uniform1i(i, 1);
+    if (shader.uProgress) |i| gl.uniform1f(i, std.math.clamp(transition.progress, 0.0, 1.0));
+
+    DSA.bindTextureUnit(0, transition.from.renderer_detail);
+    DSA.bindTextureUnit(1, transition.to.renderer_detail);
+
+    defer DSA.bindTextureUnit(0, 0); // don't forget to unbind the texture
+    defer DSA.bindTextureUnit(1, 0); // don't forget to unbind the texture
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
 pub fn createTexture(self: *Self, texture: *Resources.Texture) !Texture {

@@ -5,7 +5,7 @@ A community effort to create a small multiplayer 3D shooter game in pure zig
 
 ### Communication
 
-The main communication happens via the [Zig Showtime](https://zig.show/) discord.
+The main communication happens via the [Zig Showtime](https://discord.gg/p4bUwnf92n) discord. Please join if you want to participate!
 
 ### Contribution
 

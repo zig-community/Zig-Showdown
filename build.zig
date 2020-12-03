@@ -50,6 +50,11 @@ const pkgs = struct {
         .path = "./deps/opengl/gl_3v3_with_exts.zig",
     };
 
+    const zigimg = std.build.Pkg{
+        .name = "zigimg",
+        .path = "./deps/zigimg/zigimg.zig",
+    };
+
     const resources = std.build.Pkg{
         .name = "showdown-resources",
         .path = "./zig-cache/resources.zig", // Written by this file
@@ -176,9 +181,8 @@ pub fn build(b: *std.build.Builder) !void {
         obj_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
 
         const tex_conv = b.addExecutable("tex-conv", "src/tools/tex-conv.zig");
-        tex_conv.addCSourceFile("src/tools/stb_image.c", &[_][]const u8{});
-        tex_conv.addIncludeDir("deps/stb");
         tex_conv.addPackage(pkgs.args);
+        tex_conv.addPackage(pkgs.zigimg);
         tex_conv.setTarget(native_target);
         tex_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
         tex_conv.linkLibC();

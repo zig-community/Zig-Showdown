@@ -9,9 +9,14 @@ uniform sampler2D uFrom, uTo;
 uniform float uProgress;
 
 void main() {
-  result = mix(
-    texture(uFrom, uv),
-    texture(uTo, uv),
-    uProgress
-  );
+  vec2 xy = vec2(float(uScreenSize.x) / float(uScreenSize.y), 1.0) * uv;
+  
+  float limit = 1.0 + float(uScreenSize.x) / float(uScreenSize.y);
+
+  float threshold = limit * smoothstep(0.0, 1.0, uProgress);
+
+  if(xy.x + xy.y <= threshold)
+    result = texture(uTo, uv);
+  else
+    result = texture(uFrom, uv);
 }

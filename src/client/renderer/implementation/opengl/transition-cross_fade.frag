@@ -12,6 +12,6 @@ void main() {
   result = mix(
     texture(uFrom, uv),
     texture(uTo, uv),
-    uProgress
+    smoothstep(0.0, 1.0, uProgress)
   );
 }

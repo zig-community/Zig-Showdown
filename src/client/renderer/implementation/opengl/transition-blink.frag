@@ -9,9 +9,10 @@ uniform sampler2D uFrom, uTo;
 uniform float uProgress;
 
 void main() {
-  result = mix(
-    texture(uFrom, uv),
-    texture(uTo, uv),
-    uProgress
-  );
+  if(uProgress < 0.3)
+    result = texture(uFrom, uv);
+  else if(uProgress > 0.7)
+    result = texture(uTo, uv);
+  else
+    result = vec4(0, 0, 0, 1);
 }

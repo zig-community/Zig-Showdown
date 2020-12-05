@@ -47,6 +47,84 @@ pub fn Optional(comptime T: type) Component {
     return Component{ .type = T, .mandatory = false };
 }
 
+fn entityForIndex(entities: []const EntityGenerationData, index: usize) Entity {
+    std.debug.assert(index < entities.len);
+    std.debug.assert(entities[index].is_alive);
+    return @intToEnum(Entity, @bitCast(u32, EntityData{
+        .index = @intCast(u16, index),
+        .generation = entities[index].generation,
+    }));
+}
+
+pub fn EntityComponent(comptime C: type) type {
+    return struct {
+        entity: Entity,
+        component: *C,
+    };
+}
+
+fn MandatoryIterator(comptime C: type) type {
+    return struct {
+        const Self = @This();
+
+        entities: []const EntityGenerationData,
+        components: []C,
+        index: usize,
+
+        fn init(entities: []const EntityGenerationData, components: *MandatoryComponentSet(C)) Self {
+            return Self{
+                .entities = entities,
+                .components = components.items,
+                .index = 0,
+            };
+        }
+
+        pub fn next(self: *Self) ?EntityComponent(C) {
+            while (true) {
+                if (self.index >= self.entities.len)
+                    return null;
+                const index = self.index;
+                self.index += 1;
+                if (self.entities[index].is_alive) {
+                    return EntityComponent(C){
+                        .entity = entityForIndex(self.entities, index),
+                        .component = &self.components[index],
+                    };
+                }
+            }
+        }
+    };
+}
+
+fn OptionalIterator(comptime C: type) type {
+    return struct {
+        const Self = @This();
+
+        entities: []const EntityGenerationData,
+        iterator: OptionalComponentSet(C).Iterator,
+
+        fn init(entities: []const EntityGenerationData, item: *OptionalComponentSet(C)) Self {
+            return Self{
+                .entities = entities,
+                .iterator = item.iterator(),
+            };
+        }
+
+        pub fn next(self: *Self) ?EntityComponent(C) {
+            if (self.iterator.next()) |item| {
+                const index = item.key;
+                std.debug.assert(self.entities[index].is_alive);
+                return EntityComponent(C){
+                    .entity = entityForIndex(self.entities, index),
+                    .component = &item.value,
+                };
+            } else {
+                return null;
+            }
+        }
+    };
+}
+
 /// Creates a new entity component management system.
 /// This does not provide any logic to update components, but only
 /// manages entity and component creation/deletion as well as the memory.
@@ -240,6 +318,27 @@ pub fn ECS(comptime component_config: anytype) type {
                         _ = self.components[i].remove(index);
                     }
                     return;
+                }
+            }
+            @compileError(@typeName(C) ++ " is not a component managed by this type.");
+        }
+
+        fn ComponentIterator(comptime C: type) type {
+            inline for (component_config) |cfg, i| {
+                if (cfg.type == C) {
+                    return if (cfg.mandatory)
+                        return MandatoryIterator(C)
+                    else
+                        return OptionalIterator(C);
+                }
+            }
+            @compileError(@typeName(C) ++ " is not a component managed by this type.");
+        }
+
+        pub fn getComponents(self: *Self, comptime C: type) ComponentIterator(C) {
+            inline for (component_config) |cfg, i| {
+                if (cfg.type == C) {
+                    return ComponentIterator(C).init(self.entity_data.items, &self.components[i]);
                 }
             }
             @compileError(@typeName(C) ++ " is not a component managed by this type.");

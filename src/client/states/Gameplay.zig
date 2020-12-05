@@ -10,7 +10,7 @@ const std = @import("std");
 const zlm = @import("zlm");
 const log = std.log.scoped(.gameplay);
 
-const ec = @import("gameplay/ec.zig");
+const entity_component_system = @import("gameplay/ec.zig");
 const components = @import("gameplay/components.zig");
 
 const Self = @This();
@@ -20,13 +20,13 @@ const Input = @import("../Input.zig");
 const Renderer = @import("../Renderer.zig");
 const Camera = @import("../Camera.zig");
 
-const EntityManager = ec.ECS(&[_]ec.Component{
-    ec.Mandatory(components.Transform),
-    ec.Optional(components.PointLight),
-    ec.Optional(components.StaticGeometry),
-    ec.Optional(components.HealthPack),
-    ec.Optional(components.LocalPlayer),
-    ec.Optional(components.NetworkPlayer),
+const EntityManager = entity_component_system.ECS(&[_]entity_component_system.Component{
+    entity_component_system.Mandatory(components.Transform),
+    entity_component_system.Optional(components.PointLight),
+    entity_component_system.Optional(components.StaticGeometry),
+    entity_component_system.Optional(components.HealthPack),
+    entity_component_system.Optional(components.LocalPlayer),
+    entity_component_system.Optional(components.NetworkPlayer),
 });
 
 allocator: *std.mem.Allocator,
@@ -55,6 +55,24 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
 
     self.entities = try EntityManager.init(allocator);
     errdefer self.entities.deinit();
+
+    {
+        var i: usize = 0;
+        while (i < 5) : (i += 1) {
+            const ent = try self.entities.createEntity();
+
+            const transform = self.entities.getComponent(ent, components.Transform) orelse unreachable;
+
+            transform.position.y = 0.2;
+            transform.position.z = @intToFloat(f32, i) - 2.5;
+
+            try self.entities.addComponent(ent, components.StaticGeometry{
+                .model = self.healthpack_id,
+            });
+
+            try self.entities.addComponent(ent, components.HealthPack{});
+        }
+    }
 
     return self;
 }
@@ -109,14 +127,32 @@ pub fn render(self: *Self, renderer: *Renderer, render_target: Renderer.RenderTa
 
     try pass.drawModel(level_model, zlm.Mat4.identity);
 
+    // Rotate all healthpacks
     {
-        const pos = zlm.vec3(0, 0.2, 0);
-        const rot = 0.3 * total_time;
+        var iter = self.entities.getComponents(components.HealthPack);
+        while (iter.next()) |ec| {
+            const trafo = self.entities.getComponent(ec.entity, components.Transform) orelse unreachable;
+            trafo.rotation.y += 0.3 * delta_time;
+        }
+    }
 
-        var transform = zlm.Mat4.createAngleAxis(zlm.Vec3.unitY, rot);
-        transform = transform.mul(zlm.Mat4.createTranslation(pos));
+    // Draw all static geometries
+    {
+        var iter = self.entities.getComponents(components.StaticGeometry);
+        while (iter.next()) |ec| {
+            const trafo = self.entities.getComponent(ec.entity, components.Transform) orelse unreachable;
+            trafo.rotation.y += 0.3 * delta_time;
 
-        try pass.drawModel(healthpack_model, transform);
+            var transform = zlm.Mat4.createScale(trafo.scale.x, trafo.scale.y, trafo.scale.z);
+            transform = transform.mul(zlm.Mat4.createAngleAxis(zlm.Vec3.unitX, trafo.rotation.x));
+            transform = transform.mul(zlm.Mat4.createAngleAxis(zlm.Vec3.unitZ, trafo.rotation.z));
+            transform = transform.mul(zlm.Mat4.createAngleAxis(zlm.Vec3.unitY, trafo.rotation.y));
+            transform = transform.mul(zlm.Mat4.createTranslation(trafo.position));
+
+            const model = try self.resources.models.get(ec.component.model, Resources.usage.level_render);
+
+            try pass.drawModel(model, transform);
+        }
     }
 
     renderer.clear(render_target, Renderer.Color.fromRgb(0.2, 0.4, 0.6));

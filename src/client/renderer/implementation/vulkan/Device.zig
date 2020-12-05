@@ -225,11 +225,6 @@ pub const PhysicalDevice = struct {
         };
 
         const present_family = blk: {
-            // TODO:  For now, skip when the surface is null (until a capable window backend is in place).
-            if (surface == .null_handle) {
-                break :blk graphics_family;
-            }
-
             // Try to look for a dedicated family
             for (families) |props, i| {
                 const family = @intCast(u32, i);

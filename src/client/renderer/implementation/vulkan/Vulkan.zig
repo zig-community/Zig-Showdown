@@ -22,6 +22,7 @@ const app_info = vk.ApplicationInfo{
 
 const instance_extensions = [_][*:0]const u8{
     vk.extension_info.khr_surface.name,
+    vk.extension_info.khr_xlib_surface.name,
     // TODO: Extend with platform types
 };
 

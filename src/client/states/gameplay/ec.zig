@@ -1,31 +1,36 @@
 const std = @import("std");
 
-pub const Entity = enum(u32) {
-    _,
+pub const Entity = enum(u32) { _ };
 
-    fn hash(key: Entity) u32 {
-        return @enumToInt(key);
-    }
-    fn eql(a: Entity, b: Entity) bool {
-        return a == b;
-    }
+const EntityData = packed struct {
+    const Index = u16;
+    const Generation = u16;
+
+    index: Index,
+    generation: Generation,
 };
 
+comptime {
+    std.debug.assert(@bitSizeOf(Entity) == @bitSizeOf(EntityData));
+}
+
+fn hash_index(key: EntityData.Index) u32 {
+    return key;
+}
+fn eql_index(a: EntityData.Index, b: EntityData.Index) bool {
+    return a == b;
+}
+
 fn OptionalComponentSet(comptime C: type) type {
-    return std.ArrayHashMap(Entity, C, Entity.hash, Entity.eql, false);
+    return std.ArrayHashMap(EntityData.Index, C, hash_index, eql_index, false);
 }
 
 fn MandatoryComponentSet(comptime C: type) type {
     return std.ArrayList(C);
 }
 
-const EntityData = packed struct {
-    index: u16,
-    generation: u16,
-};
-
 const EntityGenerationData = struct {
-    generation: u16,
+    generation: EntityData.Generation,
     is_alive: bool,
 };
 
@@ -62,8 +67,9 @@ pub fn ECS(comptime component_config: anytype) type {
 
         /// stores the current generation for a given entity index
         entity_data: std.ArrayList(EntityGenerationData),
+
         /// stores freed indices in entity_data
-        free_entities: std.ArrayList(u16),
+        free_entities: std.ArrayList(EntityData.Index),
 
         /// stores either array lists or maps per component
         components: ComponentsTuple,
@@ -71,7 +77,7 @@ pub fn ECS(comptime component_config: anytype) type {
         pub fn init(allocator: *std.mem.Allocator) !Self {
             var self = Self{
                 .entity_data = std.ArrayList(EntityGenerationData).init(allocator),
-                .free_entities = std.ArrayList(u16).init(allocator),
+                .free_entities = std.ArrayList(EntityData.Index).init(allocator),
 
                 .components = undefined,
             };
@@ -104,7 +110,7 @@ pub fn ECS(comptime component_config: anytype) type {
                     .generation = self.entity_data.items[index].generation,
                 }));
             }
-            const index = @intCast(u16, self.entity_data.items.len);
+            const index = @intCast(EntityData.Index, self.entity_data.items.len);
 
             // Make sure we have enough slots in the free list
             // so destroying the entity will never ever go OOM
@@ -133,39 +139,118 @@ pub fn ECS(comptime component_config: anytype) type {
 
         /// Destroys a previously created entity handle.
         pub fn destroyEntity(self: *Self, ent: Entity) void {
-            const data = @bitCast(EntityData, ent);
+            const index = self.getEntityIndex(ent) orelse return;
 
-            // check if the entity was already deleted
-            if (!self.isAlive(ent))
-                return;
+            std.debug.assert(self.entity_data.items[index].is_alive);
 
-            std.debug.assert(self.entity_data.items[data.index].is_alive);
-
-            self.entity_data.items[data.index].generation += 1;
-            self.entity_data.items[data.index].is_alive = false;
+            self.entity_data.items[index].generation += 1;
+            self.entity_data.items[index].is_alive = false;
 
             inline for (component_config) |cfg, i| {
                 if (cfg.mandatory) {
                     // undefine the component
-                    self.components[i].items[data.index] = undefined;
+                    self.components[i].items[index] = undefined;
+                } else {
+                    // remove the component
+                    _ = self.components[i].remove(index);
                 }
             }
 
             // we have ensured the capacity in createEntity() already
-            self.free_entities.appendAssumeCapacity(data.index);
+            self.free_entities.appendAssumeCapacity(index);
         }
 
         /// returns true if the entity is still alive.
         pub fn isAlive(self: Self, ent: Entity) bool {
+            return (self.getEntityIndex(ent) != null);
+        }
+
+        /// returns the index for `ent` or `null` if the entity
+        /// does not exist
+        fn getEntityIndex(self: Self, ent: Entity) ?EntityData.Index {
             const data = @bitCast(EntityData, ent);
 
             if (data.index >= self.entity_data.items.len)
-                return false;
+                return null;
 
             const stored_info = self.entity_data.items[data.index];
-
-            return stored_info.is_alive and stored_info.generation == data.generation;
+            if (!stored_info.is_alive)
+                return null;
+            if (stored_info.generation != data.generation)
+                return null;
+            return data.index;
         }
+
+        /// Returns a pointer to the component `C` of `ent` or `null` if that
+        /// component or entity does not exist.
+        pub fn getComponent(self: *Self, ent: Entity, comptime C: type) ?*C {
+            const index = self.getEntityIndex(ent) orelse return null;
+
+            inline for (component_config) |cfg, i| {
+                if (cfg.type == C) {
+                    if (cfg.mandatory) {
+                        return &self.components[i].items[index];
+                    } else {
+                        return if (self.components[i].getEntry(index)) |entry|
+                            &entry.value
+                        else
+                            null;
+                    }
+                }
+            }
+            @compileError(@typeName(C) ++ " is not a component managed by this type.");
+        }
+
+        pub fn addComponent(self: *Self, ent: Entity, value: anytype) !void {
+            const gop = try self.getOrAddComponent(ent, @TypeOf(value));
+            if (gop.found_existing)
+                return error.AlreadyExists;
+            gop.component.* = value;
+        }
+
+        pub fn getOrAddComponent(self: *Self, ent: Entity, comptime C: type) !GetOrAddResult(C) {
+            const index = self.getEntityIndex(ent) orelse return error.EntityNotFound;
+
+            inline for (component_config) |cfg, i| {
+                if (cfg.type == C) {
+                    if (cfg.mandatory) {
+                        return GetOrAddResult(C){
+                            .found_existing = true,
+                            .component = &self.components[i].items[index],
+                        };
+                    } else {
+                        const gop = try self.components[i].getOrPut(index);
+                        return GetOrAddResult(C){
+                            .found_existing = gop.found_existing,
+                            .component = &gop.entry.value,
+                        };
+                    }
+                }
+            }
+            @compileError(@typeName(C) ++ " is not a component managed by this type.");
+        }
+
+        pub fn removeComponent(self: *Self, ent: Entity, comptime C: type) void {
+            const index = self.getEntityIndex(ent) orelse return;
+            inline for (component_config) |cfg, i| {
+                if (cfg.type == C) {
+                    if (cfg.mandatory) {
+                        @compileError("Cannot remove mandatory component " ++ @typeName(C) ++ "!");
+                    } else {
+                        _ = self.components[i].remove(index);
+                    }
+                    return;
+                }
+            }
+            @compileError(@typeName(C) ++ " is not a component managed by this type.");
+        }
+    };
+}
+
+pub fn GetOrAddResult(comptime C: type) type {
+    return struct {
+        found_existing: bool,
+        component: *C,
     };
 }
 
@@ -174,7 +259,7 @@ const TestComponent1 = struct {
 };
 
 const TestComponent2 = struct {
-    x: usize,
+    value: i32,
 };
 
 const TestECS = ECS(&[_]Component{
@@ -192,8 +277,35 @@ test "Entity Component System" {
     std.testing.expect(ecs.isAlive(e1));
     std.testing.expect(ecs.isAlive(e2));
 
+    std.testing.expect(ecs.getComponent(e1, TestComponent1) != null);
+    std.testing.expect(ecs.getComponent(e2, TestComponent1) != null);
+
+    std.testing.expect(ecs.getComponent(e1, TestComponent2) == null);
+    std.testing.expect(ecs.getComponent(e2, TestComponent2) == null);
+
+    try ecs.addComponent(e1, TestComponent2{
+        .value = 10,
+    });
+
+    std.testing.expect(ecs.getComponent(e1, TestComponent2) != null);
+    std.testing.expect(ecs.getComponent(e2, TestComponent2) == null);
+
+    std.testing.expectEqual(true, (try ecs.getOrAddComponent(e1, TestComponent2)).found_existing);
+    std.testing.expectEqual(false, (try ecs.getOrAddComponent(e2, TestComponent2)).found_existing);
+
+    ecs.removeComponent(e1, TestComponent2);
+
+    std.testing.expect(ecs.getComponent(e1, TestComponent2) == null);
+    std.testing.expect(ecs.getComponent(e2, TestComponent2) != null);
+
     ecs.destroyEntity(e2);
 
     std.testing.expect(ecs.isAlive(e1));
     std.testing.expect(!ecs.isAlive(e2));
+
+    std.testing.expect(ecs.getComponent(e1, TestComponent1) != null);
+    std.testing.expect(ecs.getComponent(e2, TestComponent1) == null);
+
+    std.testing.expect(ecs.getComponent(e1, TestComponent2) == null);
+    std.testing.expect(ecs.getComponent(e2, TestComponent2) == null);
 }

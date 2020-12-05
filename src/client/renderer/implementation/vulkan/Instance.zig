@@ -211,6 +211,8 @@ pub const InstanceDispatch = struct {
     vkGetPhysicalDeviceSurfacePresentModesKHR: vk.PfnGetPhysicalDeviceSurfacePresentModesKHR,
     vkGetPhysicalDeviceQueueFamilyProperties: vk.PfnGetPhysicalDeviceQueueFamilyProperties,
     vkGetPhysicalDeviceSurfaceSupportKHR: vk.PfnGetPhysicalDeviceSurfaceSupportKHR,
+    vkGetPhysicalDeviceFormatProperties: vk.PfnGetPhysicalDeviceFormatProperties,
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR: vk.PfnGetPhysicalDeviceSurfaceCapabilitiesKHR,
     vkCreateXlibSurfaceKHR: vk.PfnCreateXlibSurfaceKHR,
     vkDestroySurfaceKHR: vk.PfnDestroySurfaceKHR,
     vkCreateDevice: vk.PfnCreateDevice,

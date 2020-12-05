@@ -10,6 +10,7 @@ const std = @import("std");
 const zlm = @import("zlm");
 const log = std.log.scoped(.gameplay);
 
+const ec = @import("gameplay/ec.zig");
 const components = @import("gameplay/components.zig");
 
 const Self = @This();
@@ -19,24 +20,14 @@ const Input = @import("../Input.zig");
 const Renderer = @import("../Renderer.zig");
 const Camera = @import("../Camera.zig");
 
-const Entity = enum(u32) {
-    _,
-
-    fn hash(key: Entity) u32 {
-        return @enumToInt(key);
-    }
-    fn eql(a: Entity, b: Entity) bool {
-        return a == b;
-    }
-};
-
-fn OptionalComponentSet(comptime C: type) type {
-    return std.ArrayHashMap(Entity, C, Entity.hash, Entity.eql, false);
-}
-
-fn MandatoryComponentSet(comptime C: type) type {
-    return std.ArrayList(C);
-}
+const EntityManager = ec.ECS(&[_]ec.Component{
+    ec.Mandatory(components.Transform),
+    ec.Optional(components.PointLight),
+    ec.Optional(components.StaticGeometry),
+    ec.Optional(components.HealthPack),
+    ec.Optional(components.LocalPlayer),
+    ec.Optional(components.NetworkPlayer),
+});
 
 allocator: *std.mem.Allocator,
 resources: *Resources,
@@ -49,17 +40,7 @@ cam: Camera = .{
     .euler = zlm.vec3(0, 0, 0),
 },
 
-/// stores the current generation for a given entity index
-entity_generations: std.ArrayList(u16),
-/// stores freed indices in entity_generations
-free_entities: std.ArrayList(u16),
-
-transforms: MandatoryComponentSet(components.Transform),
-point_lights: OptionalComponentSet(components.PointLight),
-static_geometries: OptionalComponentSet(components.StaticGeometry),
-health_packs: OptionalComponentSet(components.HealthPack),
-local_players: OptionalComponentSet(components.LocalPlayer),
-network_players: OptionalComponentSet(components.NetworkPlayer),
+entities: EntityManager,
 
 pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
     var self = Self{
@@ -69,68 +50,18 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .level_model_id = try resources.models.getName("/assets/maps/demo.mdl"),
         .healthpack_id = try resources.models.getName("/assets/models/healthpack.mdl"),
 
-        .entity_generations = std.ArrayList(u16).init(allocator),
-        .free_entities = std.ArrayList(u16).init(allocator),
-        .transforms = MandatoryComponentSet(components.Transform).init(allocator),
-        .point_lights = OptionalComponentSet(components.PointLight).init(allocator),
-        .static_geometries = OptionalComponentSet(components.StaticGeometry).init(allocator),
-        .health_packs = OptionalComponentSet(components.HealthPack).init(allocator),
-        .local_players = OptionalComponentSet(components.LocalPlayer).init(allocator),
-        .network_players = OptionalComponentSet(components.NetworkPlayer).init(allocator),
+        .entities = undefined,
     };
+
+    self.entities = try EntityManager.init(allocator);
+    errdefer self.entities.deinit();
 
     return self;
 }
 
 pub fn deinit(self: *Self) void {
-    self.entity_generations.deinit();
-    self.free_entities.deinit();
-    self.transforms.deinit();
-    self.point_lights.deinit();
-    self.static_geometries.deinit();
-    self.health_packs.deinit();
-    self.local_players.deinit();
-    self.network_players.deinit();
+    self.entities.deinit();
     self.* = undefined;
-}
-
-const EntityData = packed struct {
-    index: u16,
-    generation: u16,
-};
-
-/// Creates a new, unique entity handle
-fn createEntity(self: *Self) !Entity {
-    if (self.free_entities.popOrNull()) |index| {
-        return @bitCast(Entity, EntityData{
-            .index = index,
-            .generation = self.entity_generations.items[index],
-        });
-    }
-    const index = @intCast(u16, self.entity_generations.items.len);
-
-    try self.entity_generations.append(0);
-
-    return @bitCast(Entity, EntityData{
-        .index = index,
-        .generation = 0,
-    });
-}
-
-/// Destroys a previously created entity handle.
-fn destroyEntity(self: *Self, ent: Entity) void {
-    const data = @bitCast(EntityData, ent);
-
-    // check if the entity was already deleted
-    if (self.entity_generations.items[data.index] != data.generation)
-        return;
-
-    self.entity_generations.items[data.index] += 1;
-    self.free_entities.append(data.index) catch |err| {
-        // this operation is not critical when it fails, but
-        // we should log it either.
-        log.emerg("{} in Gameplay.destroyEntity", .{err});
-    };
 }
 
 pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void {

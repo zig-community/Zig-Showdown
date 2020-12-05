@@ -5,7 +5,7 @@ const Resources = @import("../../Resources.zig");
 
 /// mandatory component: position of each entity
 pub const Transform = struct {
-    position: zlm.Vec3,
+    position: zlm.Vec3 = zlm.vec3(0, 0, 0),
     rotation: zlm.Vec3 = zlm.vec3(0, 0, 0), // euler angles are bad, but good enough for this game :)
     scale: zlm.Vec3 = zlm.vec3(1, 1, 1),
 };

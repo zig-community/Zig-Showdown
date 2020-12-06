@@ -282,6 +282,7 @@ pub const PhysicalDevice = struct {
 const DeviceDispatch = struct {
     vkDestroyDevice: vk.PfnDestroyDevice,
     vkGetDeviceQueue: vk.PfnGetDeviceQueue,
+    vkQueuePresentKHR: vk.PfnQueuePresentKHR,
     vkCreateSwapchainKHR: vk.PfnCreateSwapchainKHR,
     vkDestroySwapchainKHR: vk.PfnDestroySwapchainKHR,
     vkGetSwapchainImagesKHR: vk.PfnGetSwapchainImagesKHR,

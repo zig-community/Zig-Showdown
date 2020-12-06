@@ -2,9 +2,11 @@ const std = @import("std");
 const vk = @import("vulkan");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
+const asManyPtr = @import("util.zig").asManyPtr;
 const Allocator = std.mem.Allocator;
 
 const Self = @This();
+const acquire_timeout = 1 * std.time.ns_per_s;
 
 pub const CreateInfo = struct {
     surface: vk.SurfaceKHR,
@@ -21,6 +23,7 @@ extent: vk.Extent2D,
 allocator: *Allocator,
 images: []vk.Image,
 image_views: []vk.ImageView,
+image_index: u32,
 
 pub fn init(
     instance: *const Instance,
@@ -35,6 +38,7 @@ pub fn init(
         .allocator = allocator,
         .images = try allocator.alloc(vk.Image, 0),
         .image_views = try allocator.alloc(vk.ImageView, 0),
+        .image_index = undefined,
     };
 
     try self.reinit(instance, device, create_info);
@@ -101,6 +105,8 @@ pub fn reinit(
 
     try self.fetchSwapImages(device);
     try self.createImageViews(device);
+
+    self.image_index = undefined;
 }
 
 pub fn deinit(self: *Self, device: *const Device) void {
@@ -112,6 +118,34 @@ pub fn deinit(self: *Self, device: *const Device) void {
     self.allocator.free(self.images);
     device.vkd.destroySwapchainKHR(device.handle, self.handle, null);
     self.* = undefined;
+}
+
+pub const PresentState = enum {
+    optimal,
+    suboptimal,
+};
+
+pub fn acquireNextImage(self: *Self, device: *const Device, image_acquired: vk.Semaphore) !PresentState {
+    const result = try device.vkd.acquireNextImage(device.handle, self.handle, acquire_timeout, image_acquired, .null_handle);
+    self.image_index = result.image_index;
+
+    return switch (result.result) {
+        .success => PresentState.optimal,
+        .suboptimal_khr => PresentState.suboptimal,
+        .not_ready => unreachable, // Only reachable if timeout is zero
+        .timeout => return error.AcquireTimeout,
+    };
+}
+
+pub fn present(self: *Self, device: *const Device, wait_semaphores: []const vk.Semaphore) !void {
+    _ = try device.vkd.queuePresentKHR(device.present_queue.handle, .{
+        .wait_semaphore_count = @intCast(u32, wait_semaphores.len),
+        .p_wait_semaphores = wait_semaphores.ptr,
+        .swapchain_count = 1,
+        .p_swapchains = asManyPtr(&self.handle),
+        .p_image_indices = asManyPtr(&self.image_index),
+        .p_results = null,
+    });
 }
 
 fn fetchSwapImages(self: *Self, device: *const Device) !void {

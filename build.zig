@@ -106,6 +106,15 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
             exe.step.dependOn(&gen_vk.step);
             exe.addPackage(gen_vk.package);
             exe.linkLibC();
+
+            if (target.isLinux()) {
+                exe.linkSystemLibrary("X11");
+
+                 // TODO: Remove when the ZWL Xlib backend does not depends on GL anymore.
+                exe.linkSystemLibrary("GL");
+            } else {
+                @panic("vulkan/vulkan_rt not yet implemented yet for this target");
+            }
         },
         .software => {
             exe.addPackage(pkgs.pixel_draw);

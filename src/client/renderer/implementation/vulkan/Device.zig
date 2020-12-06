@@ -2,6 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 const Instance = @import("Instance.zig");
 const Allocator = std.mem.Allocator;
+const SmallBuf = @import("util.zig").SmallBuf;
 
 const Self = @This();
 
@@ -102,6 +103,23 @@ pub fn init(
 pub fn deinit(self: *Self) void {
     self.vkd.destroyDevice(self.handle, null);
     self.* = undefined;
+}
+
+pub fn uniqueQueueFamilies(self: Self) SmallBuf(3, u32) {
+    var buf = SmallBuf(3, u32){};
+    const families = [_]u32{
+        self.graphics_queue.family,
+        self.compute_queue.family,
+        self.present_queue.family,
+    };
+
+    for (families) |fam| {
+        if (std.mem.indexOfScalar(u32, buf.asSlice(), fam) == null) {
+            buf.appendAssumeCapacity(fam);
+        }
+    }
+
+    return buf;
 }
 
 pub const Queue = struct {
@@ -225,11 +243,6 @@ pub const PhysicalDevice = struct {
         };
 
         const present_family = blk: {
-            // TODO:  For now, skip when the surface is null (until a capable window backend is in place).
-            if (surface == .null_handle) {
-                break :blk graphics_family;
-            }
-
             // Try to look for a dedicated family
             for (families) |props, i| {
                 const family = @intCast(u32, i);
@@ -269,6 +282,12 @@ pub const PhysicalDevice = struct {
 const DeviceDispatch = struct {
     vkDestroyDevice: vk.PfnDestroyDevice,
     vkGetDeviceQueue: vk.PfnGetDeviceQueue,
+    vkQueuePresentKHR: vk.PfnQueuePresentKHR,
+    vkCreateSwapchainKHR: vk.PfnCreateSwapchainKHR,
+    vkDestroySwapchainKHR: vk.PfnDestroySwapchainKHR,
+    vkGetSwapchainImagesKHR: vk.PfnGetSwapchainImagesKHR,
+    vkCreateImageView: vk.PfnCreateImageView,
+    vkDestroyImageView: vk.PfnDestroyImageView,
 
     usingnamespace vk.DeviceWrapper(@This());
 };

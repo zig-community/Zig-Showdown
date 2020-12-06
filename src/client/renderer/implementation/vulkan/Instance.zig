@@ -63,8 +63,15 @@ pub fn deinit(self: *Self) void {
 
 /// Create a Vulkan Surface for the given Window handle.
 pub fn createSurface(self: Self, window: *WindowPlatform.Window) !vk.SurfaceKHR {
-    // TODO
-    return .null_handle;
+    // TODO: Support other platforms.
+    const x_display = @ptrCast(*WindowPlatform.PlatformXlib, window.platform).display;
+    const x_window = @ptrCast(*WindowPlatform.PlatformXlib.Window, window).window;
+
+    return try self.vki.createXlibSurfaceKHR(self.handle, .{
+        .flags = .{},
+        .dpy = @ptrCast(*vk.Display, x_display),
+        .window = x_window,
+    }, null);
 }
 
 /// Returns an array of instance extensions that is supported by the Vulkan implementation.
@@ -96,8 +103,15 @@ pub fn enumeratePhysicalDevices(self: Self, allocator: *Allocator) ![]PhysicalDe
     return pdevs;
 }
 
+/// This struct models a list of requirements a potential device needs to satisfy in order
+/// to be used as render device.
+// TODO: Add method to require a specific device (pipelineCacheUUD).
+// TODO: Add method to require specifuc device features and limits to be present.
 const DeviceRequirements = struct {
+    /// The surface the device needs to be compatible with.
     surface: vk.SurfaceKHR,
+
+    /// A list of extensions that the device needs to support.
     required_extensions: []const [*:0]const u8,
 };
 
@@ -120,8 +134,7 @@ pub fn findAndCreateDevice(
         const msg_base_args = .{ pdev.name() };
 
         // First, check whether the device supports the surface at all.
-        // TODO: For now, skip when the surface is null (until a capable window backend is in place).
-        if (requirements.surface != .null_handle and !(try pdev.supportsSurface(self, requirements.surface))) {
+        if (!(try pdev.supportsSurface(self, requirements.surface))) {
             log.info(msg_base_fmt ++ "surface not supported", msg_base_args);
             continue;
         }
@@ -198,6 +211,9 @@ pub const InstanceDispatch = struct {
     vkGetPhysicalDeviceSurfacePresentModesKHR: vk.PfnGetPhysicalDeviceSurfacePresentModesKHR,
     vkGetPhysicalDeviceQueueFamilyProperties: vk.PfnGetPhysicalDeviceQueueFamilyProperties,
     vkGetPhysicalDeviceSurfaceSupportKHR: vk.PfnGetPhysicalDeviceSurfaceSupportKHR,
+    vkGetPhysicalDeviceFormatProperties: vk.PfnGetPhysicalDeviceFormatProperties,
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR: vk.PfnGetPhysicalDeviceSurfaceCapabilitiesKHR,
+    vkCreateXlibSurfaceKHR: vk.PfnCreateXlibSurfaceKHR,
     vkDestroySurfaceKHR: vk.PfnDestroySurfaceKHR,
     vkCreateDevice: vk.PfnCreateDevice,
     vkGetDeviceProcAddr: vk.PfnGetDeviceProcAddr,

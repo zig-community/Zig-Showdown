@@ -17,7 +17,9 @@ fn ArrayPtr(comptime Ptr: type) type {
 }
 
 pub fn asManyPtr(ptr: anytype) ManyPtr(@TypeOf(ptr)) {
-    return @as(ArrayPtr(@TypeOf(ptr)), ptr);
+    // For some reason this doesn't work with @as
+    const x: ArrayPtr(@TypeOf(ptr)) = ptr;
+    return x;
 }
 
 pub fn SmallBuf(comptime max_size: usize, comptime T: type) type {

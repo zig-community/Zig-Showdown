@@ -282,12 +282,20 @@ pub const PhysicalDevice = struct {
 const DeviceDispatch = struct {
     vkDestroyDevice: vk.PfnDestroyDevice,
     vkGetDeviceQueue: vk.PfnGetDeviceQueue,
+    vkQueueSubmit: vk.PfnQueueSubmit,
     vkQueuePresentKHR: vk.PfnQueuePresentKHR,
     vkCreateSwapchainKHR: vk.PfnCreateSwapchainKHR,
     vkDestroySwapchainKHR: vk.PfnDestroySwapchainKHR,
     vkGetSwapchainImagesKHR: vk.PfnGetSwapchainImagesKHR,
+    vkAcquireNextImageKHR: vk.PfnAcquireNextImageKHR,
     vkCreateImageView: vk.PfnCreateImageView,
     vkDestroyImageView: vk.PfnDestroyImageView,
+    vkCreateSemaphore: vk.PfnCreateSemaphore,
+    vkDestroySemaphore: vk.PfnDestroySemaphore,
+    vkCreateFence: vk.PfnCreateFence,
+    vkDestroyFence: vk.PfnDestroyFence,
+    vkWaitForFences: vk.PfnWaitForFences,
+    vkResetFences: vk.PfnResetFences,
 
     usingnamespace vk.DeviceWrapper(@This());
 };

@@ -7,11 +7,13 @@ const Color = @import("../../Color.zig");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
 const Swapchain = @import("Swapchain.zig");
-const system = std.os.system;
+const asManyPtr = @import("util.zig").asManyPtr;
 const Allocator = std.mem.Allocator;
 pub const log = std.log.scoped(.vulkan);
 
 const Self = @This();
+const frame_overlap = 2;
+const frame_timeout = 1 * std.time.ns_per_s;
 
 pub const Configuration = struct {
     multisampling: ?u8 = null,
@@ -39,6 +41,9 @@ libvulkan: std.DynLib,
 instance: Instance,
 device: Device,
 surface: vk.SurfaceKHR,
+swapchain: Swapchain,
+frames: [frame_overlap]Frame,
+frame_nr: usize,
 
 pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
     log.info("Initializing Vulkan rendering backend", .{});
@@ -83,17 +88,40 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
         .swap_image_usage = .{ .color_attachment_bit = true },
         .queue_family_indices = qfi.asConstSlice(),
     });
-    defer swapchain.deinit(&device);
+    errdefer swapchain.deinit(&device);
+
+    log.info("Created swapchain with surface {}", .{ @tagName(swapchain.surface_format.format) });
+
+    var frames: [frame_overlap]Frame = undefined;
+    var n_successfully_created: usize = 0;
+    errdefer for (frames[0 .. n_successfully_created]) |*frame| frame.deinit(&device);
+    for (frames) |*frame, i| {
+        frame.* = try Frame.init(&device);
+        n_successfully_created = i;
+    }
 
     return Self{
         .libvulkan = libvulkan,
         .instance = instance,
         .device = device,
         .surface = surface,
+        .swapchain = swapchain,
+        .frames = frames,
+        .frame_nr = 0,
     };
 }
 
 pub fn deinit(self: *Self) void {
+    log.debug("Rendered {} frames", .{ self.frame_nr });
+
+    self.waitForAllFrames() catch |err| {
+        // These errors are unrecoverable anyway
+        log.crit("Received critical error {} during deinitialization", .{ @errorName(err) });
+        return;
+    };
+
+    for (self.frames) |*frame| frame.deinit(&self.device);
+    self.swapchain.deinit(&self.device);
     self.instance.vki.destroySurfaceKHR(self.instance.handle, self.surface, null);
     self.device.deinit();
     self.instance.deinit();
@@ -101,12 +129,38 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn beginFrame(self: *Self) void {
-    // stub
+pub fn beginFrame(self: *Self) !void {
+    const frame = &self.frames[self.frame_nr % frame_overlap];
+    try frame.wait(&self.device);
+
+    const present_state = self.swapchain.acquireNextImage(&self.device, frame.image_acquired) catch |err| switch (err) {
+        error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
+        else => |other| return other,
+    };
+
+    // TODO: Recreate swapchain if suboptimal
+    if (present_state == .suboptimal) {
+        log.alert("Swapchain suboptimal or out of date\n", .{});
+    }
 }
 
-pub fn endFrame(self: *Self) void {
-    // stub
+pub fn endFrame(self: *Self) !void {
+    const frame = &self.frames[self.frame_nr % frame_overlap];
+
+    const submit_info = vk.SubmitInfo{
+        .wait_semaphore_count = 1,
+        .p_wait_semaphores = asManyPtr(&frame.image_acquired),
+        .p_wait_dst_stage_mask = &[_]vk.PipelineStageFlags{ .{.bottom_of_pipe_bit = true} },
+        .command_buffer_count = 0,
+        .p_command_buffers = undefined,
+        .signal_semaphore_count = 1,
+        .p_signal_semaphores = asManyPtr(&frame.render_finished),
+    };
+
+    try self.device.vkd.queueSubmit(self.device.graphics_queue.handle, 1, asManyPtr(&submit_info), frame.frame_fence);
+    try self.swapchain.present(&self.device, &[_]vk.Semaphore{ frame.render_finished });
+
+    self.frame_nr += 1;
 }
 
 pub fn clear(self: *Self, rt: Renderer.RenderTarget, color: Color) void {
@@ -124,3 +178,47 @@ pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: 
 pub fn submitTransition(self: *Self, render_target: Renderer.RenderTarget, transition: Renderer.Transition) !void {
     // stub
 }
+
+fn waitForAllFrames(self: *Self) !void {
+    for (self.frames) |frame| try frame.wait(&self.device);
+}
+
+const Frame = struct {
+    image_acquired: vk.Semaphore,
+    render_finished: vk.Semaphore,
+    frame_fence: vk.Fence,
+
+    fn init(device: *const Device) !Frame {
+        const image_acquired = try device.vkd.createSemaphore(device.handle, .{.flags = .{}}, null);
+        errdefer device.vkd.destroySemaphore(device.handle, image_acquired, null);
+
+        const render_finished = try device.vkd.createSemaphore(device.handle, .{.flags = .{}}, null);
+        errdefer device.vkd.destroySemaphore(device.handle, render_finished, null);
+
+        const frame_fence = try device.vkd.createFence(device.handle, .{.flags = .{.signaled_bit = true}}, null);
+        errdefer device.vkd.destroyFence(device.handle, frame_fence, null);
+
+        return Frame{
+            .image_acquired = image_acquired,
+            .render_finished = render_finished,
+            .frame_fence = frame_fence,
+        };
+    }
+
+    fn deinit(self: *Frame, device: *const Device) void {
+        device.vkd.destroyFence(device.handle, self.frame_fence, null);
+        device.vkd.destroySemaphore(device.handle, self.render_finished, null);
+        device.vkd.destroySemaphore(device.handle, self.image_acquired, null);
+        self.* = undefined;
+    }
+
+    fn wait(self: Frame, device: *const Device) !void {
+        const fence = asManyPtr(&self.frame_fence);
+        const result = try device.vkd.waitForFences(device.handle, 1, fence, vk.TRUE, frame_timeout);
+        if (result == .timeout) {
+            return error.Hang;
+        }
+
+        try device.vkd.resetFences(device.handle, 1, fence);
+    }
+};

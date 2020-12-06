@@ -155,14 +155,15 @@ pub const PresentState = enum {
 /// pixel layout, for example), .suboptimal is returned. When this function returns error.OutOfDateKHR (or .suboptimal)
 /// `self.reinit` should be called.
 pub fn acquireNextImage(self: *Self, device: *const Device, image_acquired: vk.Semaphore) !PresentState {
-    const result = try device.vkd.acquireNextImage(device.handle, self.handle, acquire_timeout, image_acquired, .null_handle);
+    const result = try device.vkd.acquireNextImageKHR(device.handle, self.handle, acquire_timeout, image_acquired, .null_handle);
     self.image_index = result.image_index;
 
     return switch (result.result) {
         .success => PresentState.optimal,
         .suboptimal_khr => PresentState.suboptimal,
         .not_ready => unreachable, // Only reachable if timeout is zero
-        .timeout => return error.AcquireTimeout,
+        .timeout => return error.Hang,
+        else => unreachable,
     };
 }
 

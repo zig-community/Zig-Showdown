@@ -8,11 +8,28 @@ const Allocator = std.mem.Allocator;
 const Self = @This();
 const acquire_timeout = 1 * std.time.ns_per_s;
 
+/// This structure models a set of options that need to be considered when (re) creating
+/// a swapchain.
 pub const CreateInfo = struct {
+    /// The surface backing the swapchain.
     surface: vk.SurfaceKHR,
+
+    /// Whether vsync needs to be enabled. Currently, either mailbox or immediate is
+    /// preferred, and vsync is used as fallback option. Setting this field to true
+    /// overrides the present mode to .fifo_khr, which is vsync.
     vsync: bool = false,
+
+    /// The desired extent of the swap images. Note that the actual size can differ in
+    /// odd cases, for example in race conditions where the window size changes after
+    /// (re)init has already been called.
     desired_extent: vk.Extent2D,
+
+    /// The intended usage of the swap images. This is in most cases just .color_attachment_bit.
     swap_image_usage: vk.ImageUsageFlags,
+
+    /// The list of queue families that will make use of the swap images. The indices in
+    /// this slice need to be unique. The simplest method is to just pass in the result
+    /// of `Device.uniqueQueueFamilies()`.
     queue_family_indices: []const u32,
 };
 
@@ -25,6 +42,7 @@ images: []vk.Image,
 image_views: []vk.ImageView,
 image_index: u32,
 
+/// Attempt to initialize a new swapchain.
 pub fn init(
     instance: *const Instance,
     device: *const Device,
@@ -41,11 +59,17 @@ pub fn init(
         .image_index = undefined,
     };
 
-    try self.reinit(instance, device, create_info);
+    self.reinit(instance, device, create_info) catch |err| {
+        self.deinit(device);
+        return err;
+    };
 
     return self;
 }
 
+/// Recreate the swapchain, where the current swapchain handle is recycled. Note that
+/// if this function fails, it can still be called again. Furthermore, deinit needs to
+/// be called to deinitialize the swapchain regardless whether this function fails.
 pub fn reinit(
     self: *Self,
     instance: *const Instance,
@@ -60,6 +84,7 @@ pub fn reinit(
     // fifo being unsupported if getPhysicalDeviceSurfacePresentModesKHR is not called. To work around
     // this for now, just override the value after calling that function. (It needs to be called with a
     // a valid pointer as well it seems).
+    // fifo needs to be supported on every platform, so just overriding the result here is safe.
     if (create_info.vsync) {
         present_mode = .fifo_khr;
     }
@@ -95,7 +120,6 @@ pub fn reinit(
         .clipped = vk.TRUE,
         .old_swapchain = self.handle,
     }, null);
-    errdefer device.vkd.destroySwapchainKHR(device.handle, self.handle, null);
 
     // TODO: Destroy the handle *after* acquiring the first frame, the give the
     // presentation engine the opportunity to finish presenting to the old frames.
@@ -125,6 +149,11 @@ pub const PresentState = enum {
     suboptimal,
 };
 
+/// Acquire the next image to render to. The resulting image index can be found in `self.image_index`.
+/// When the image is ready to be presented to, `image_acquired` will be signalled. This function returns the
+/// swapchain state: If the swapchain should be recreated (because the window was moved to a monitor with a different)
+/// pixel layout, for example), .suboptimal is returned. When this function returns error.OutOfDateKHR (or .suboptimal)
+/// `self.reinit` should be called.
 pub fn acquireNextImage(self: *Self, device: *const Device, image_acquired: vk.Semaphore) !PresentState {
     const result = try device.vkd.acquireNextImage(device.handle, self.handle, acquire_timeout, image_acquired, .null_handle);
     self.image_index = result.image_index;
@@ -137,6 +166,8 @@ pub fn acquireNextImage(self: *Self, device: *const Device, image_acquired: vk.S
     };
 }
 
+/// Schedule the current swap image (self.image_index) for presentation. `wait_semaphores` is a list of
+/// semaphores to wait on before presentation.
 pub fn present(self: *Self, device: *const Device, wait_semaphores: []const vk.Semaphore) !void {
     _ = try device.vkd.queuePresentKHR(device.present_queue.handle, .{
         .wait_semaphore_count = @intCast(u32, wait_semaphores.len),
@@ -148,6 +179,7 @@ pub fn present(self: *Self, device: *const Device, wait_semaphores: []const vk.S
     });
 }
 
+/// Fetch the swapchain's list of swap images to internal storage.
 fn fetchSwapImages(self: *Self, device: *const Device) !void {
     var count: u32 = undefined;
     _ = try device.vkd.getSwapchainImagesKHR(device.handle, self.handle, &count, null);
@@ -155,6 +187,9 @@ fn fetchSwapImages(self: *Self, device: *const Device) !void {
     _ = try device.vkd.getSwapchainImagesKHR(device.handle, self.handle, &count, self.images.ptr);
 }
 
+/// Create an image view for every swap chain, and store them internally.
+/// Special care is taken in this function such that it leaves the internal state valid
+/// for `reinit` or `deinit`.
 fn createImageViews(self: *Self, device: *const Device) !void {
     for (self.image_views) |view| {
         device.vkd.destroyImageView(device.handle, view, null);
@@ -193,6 +228,7 @@ fn createImageViews(self: *Self, device: *const Device) !void {
     }
 }
 
+/// Query for a surface format that satisfies the requirements in `create_info`.
 fn findSurfaceFormat(
     instance: *const Instance,
     pdev: vk.PhysicalDevice,
@@ -250,6 +286,8 @@ fn findSurfaceFormat(
     return surface_format orelse error.NoSupportedSurfaceFormat;
 }
 
+/// Find a present mode. Mailbox and immediate mode are preferred, and fifo is used as a
+/// fallback option.
 fn findPresentMode(
     instance: *const Instance,
     pdev: vk.PhysicalDevice,
@@ -276,6 +314,8 @@ fn findPresentMode(
     return .fifo_khr;
 }
 
+/// Find the actual extent of the swapchain. Note that it may differ from the desired `extent`,
+/// for example due to race conditions.
 fn findActualExtent(caps: vk.SurfaceCapabilitiesKHR, extent: vk.Extent2D) vk.Extent2D {
     if (caps.current_extent.width != 0xFFFF_FFFF) {
         return caps.current_extent;

@@ -284,6 +284,8 @@ const DeviceDispatch = struct {
     vkGetDeviceQueue: vk.PfnGetDeviceQueue,
     vkCreateSwapchainKHR: vk.PfnCreateSwapchainKHR,
     vkDestroySwapchainKHR: vk.PfnDestroySwapchainKHR,
+    vkGetSwapchainImagesKHR: vk.PfnGetSwapchainImagesKHR,
+    vkCreateImageView: vk.PfnCreateImageView,
     vkDestroyImageView: vk.PfnDestroyImageView,
 
     usingnamespace vk.DeviceWrapper(@This());

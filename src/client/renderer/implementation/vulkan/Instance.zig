@@ -105,8 +105,8 @@ pub fn enumeratePhysicalDevices(self: Self, allocator: *Allocator) ![]PhysicalDe
 
 /// This struct models a list of requirements a potential device needs to satisfy in order
 /// to be used as render device.
-/// TODO: Add method to require a specific device (pipelineCacheUUD).
-/// TODO: Add method to require specifuc device features and limits to be present.
+// TODO: Add method to require a specific device (pipelineCacheUUD).
+// TODO: Add method to require specifuc device features and limits to be present.
 const DeviceRequirements = struct {
     /// The surface the device needs to be compatible with.
     surface: vk.SurfaceKHR,

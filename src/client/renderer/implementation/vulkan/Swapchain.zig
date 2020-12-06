@@ -93,13 +93,14 @@ pub fn reinit(
     }, null);
     errdefer device.vkd.destroySwapchainKHR(device.handle, self.handle, null);
 
-    // TODO: Destroy the handle *after* acquiring the first frame, the give the presentation engine the opportunity
-    // to finish presenting to the old frames. It's technically valid to nuke the swapchain at any point,
-    // but this should be a little more efficient.
+    // TODO: Destroy the handle *after* acquiring the first frame, the give the
+    // presentation engine the opportunity to finish presenting to the old frames.
+    // It's technically valid to nuke the swapchain at any point, ut this should
+    // be a little more efficient.
     device.vkd.destroySwapchainKHR(device.handle, old_handle, null);
 
-    // TODO: Fetch swap images.
-    // TODO: Fetch swap image views.
+    try self.fetchSwapImages(device);
+    try self.createImageViews(device);
 }
 
 pub fn deinit(self: *Self, device: *const Device) void {
@@ -107,10 +108,55 @@ pub fn deinit(self: *Self, device: *const Device) void {
         device.vkd.destroyImageView(device.handle, view, null);
     }
 
-    self.allocator.free(self.images);
     self.allocator.free(self.image_views);
+    self.allocator.free(self.images);
     device.vkd.destroySwapchainKHR(device.handle, self.handle, null);
     self.* = undefined;
+}
+
+fn fetchSwapImages(self: *Self, device: *const Device) !void {
+    var count: u32 = undefined;
+    _ = try device.vkd.getSwapchainImagesKHR(device.handle, self.handle, &count, null);
+    self.images = try self.allocator.realloc(self.images, count);
+    _ = try device.vkd.getSwapchainImagesKHR(device.handle, self.handle, &count, self.images.ptr);
+}
+
+fn createImageViews(self: *Self, device: *const Device) !void {
+    for (self.image_views) |view| {
+        device.vkd.destroyImageView(device.handle, view, null);
+    }
+
+    // Early returning would make `deinit()` destroy the image views again.
+    // On error, simply shrink the image view array to 0 to prevent that.
+    errdefer self.image_views = self.allocator.shrink(self.image_views, 0);
+
+    self.image_views = try self.allocator.realloc(self.image_views, self.images.len);
+
+    // Make sure to destroy successfully created image views when one fails to be created.
+    var n_successfully_created: usize = 0;
+    errdefer {
+        for (self.image_views[0 .. n_successfully_created]) |view| {
+            device.vkd.destroyImageView(device.handle, view, null);
+        }
+    }
+
+    for (self.image_views) |*view, i| {
+        view.* = try device.vkd.createImageView(device.handle, .{
+            .flags = .{},
+            .image = self.images[i],
+            .view_type = .@"2d",
+            .format = self.surface_format.format,
+            .components = .{.r = .identity, .g = .identity, .b = .identity, .a = .identity},
+            .subresource_range = .{
+                .aspect_mask = .{.color_bit = true},
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        }, null);
+        n_successfully_created = i;
+    }
 }
 
 fn findSurfaceFormat(

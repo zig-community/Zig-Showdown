@@ -22,12 +22,12 @@ pub fn asManyPtr(ptr: anytype) ManyPtr(@TypeOf(ptr)) {
     return x;
 }
 
-pub fn SmallBuf(comptime max_size: usize, comptime T: type) type {
+pub fn SmallBuf(comptime max_size: comptime_int, comptime T: type) type {
     return struct {
         const Self = @This();
 
         items: [max_size]T = undefined,
-        len: usize = 0,
+        len: std.math.IntFittingRange(0, max_size) = 0,
 
         pub fn append(self: *Self, item: T) !void {
             if (self.len == max_size) {

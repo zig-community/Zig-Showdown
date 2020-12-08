@@ -25,12 +25,10 @@ pub fn init(
     const family_indices = [_]u32{qa.graphics_family, qa.compute_family, qa.present_family};
     const priorities = [_]f32{1} ** family_indices.len;
 
-    var qci_buffer: [family_indices.len]vk.DeviceQueueCreateInfo = undefined;
-    var n_unique_families: u32 = 0;
-
+    var qci_buffer = SmallBuf(family_indices.len, vk.DeviceQueueCreateInfo){};
     for (family_indices) |family| {
         // Check whether this family is already scheduled for creation.
-        for (qci_buffer[0 .. n_unique_families]) |*qci| {
+        for (qci_buffer.asSlice()) |*qci| {
             if (qci.queue_family_index == family) {
                 // If so, we can simply increase the queue count if there is room left.
                 if (qci.queue_count < qa.families[family].queue_count) {
@@ -39,21 +37,19 @@ pub fn init(
                 break;
             }
         } else {
-            // If its not already scheduled, schedule it.
-            qci_buffer[n_unique_families] = .{
+            qci_buffer.appendAssumeCapacity(.{
                 .flags = .{},
                 .queue_family_index = family,
                 .queue_count = 1,
                 .p_queue_priorities = &priorities,
-            };
-            n_unique_families += 1;
+            });
         }
     }
 
     const handle = try instance.vki.createDevice(pdev.handle, .{
         .flags = .{},
-        .queue_create_info_count = n_unique_families,
-        .p_queue_create_infos = &qci_buffer,
+        .queue_create_info_count = qci_buffer.len,
+        .p_queue_create_infos = &qci_buffer.items,
         .enabled_layer_count = 0,
         .pp_enabled_layer_names = undefined,
         .enabled_extension_count = @intCast(u32, extensions.len),
@@ -71,7 +67,7 @@ pub fn init(
         const family = family_indices[i];
 
         // First, find the queue create info for this family
-        const qci = for (qci_buffer[0 .. n_unique_families]) |*qci| {
+        const qci = for (qci_buffer.asSlice()) |*qci| {
             if (qci.queue_family_index == family) {
                 break qci;
             }

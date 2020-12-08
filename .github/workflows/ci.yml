@@ -32,7 +32,7 @@ jobs:
         if: ${{ matrix.platform == 'ubuntu-latest' && matrix.renderer == 'opengl' }}
         uses: mstksg/get-package@v1
         with:
-          apt-get: mesa-common-dev
+          apt-get: mesa-common-dev libgl1-mesa-dev
 
 
       - name: Run test suite

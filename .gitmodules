@@ -31,3 +31,6 @@
 [submodule "deps/zigimg"]
 	path = deps/zigimg
 	url = https://github.com/zigimg/zigimg
+[submodule "deps/libsoundio"]
+	path = deps/libsoundio
+	url = https://github.com/andrewrk/libsoundio

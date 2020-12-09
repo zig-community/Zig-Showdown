@@ -93,6 +93,14 @@ const RenderBackend = enum {
     vulkan_rt,
 };
 
+const AudioConfig = struct {
+    jack: bool = false,
+    pulseaudio: bool,
+    alsa: bool,
+    coreaudio: bool,
+    wasapi: bool,
+};
+
 fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget, render_backend: RenderBackend, gen_vk: *vkgen.VkGenerateStep) void {
     exe.addPackage(pkgs.network);
     exe.addPackage(pkgs.args);
@@ -110,7 +118,7 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
             if (target.isLinux()) {
                 exe.linkSystemLibrary("X11");
 
-                 // TODO: Remove when the ZWL Xlib backend does not depends on GL anymore.
+                // TODO: Remove when the ZWL Xlib backend does not depends on GL anymore.
                 exe.linkSystemLibrary("GL");
             } else {
                 @panic("vulkan/vulkan_rt not yet implemented yet for this target");
@@ -175,6 +183,14 @@ pub fn build(b: *std.build.Builder) !void {
         "embed-resources",
         "When set, the resources will be embedded into the binary.",
     ) orelse false;
+
+    var audio_config = AudioConfig{
+        .jack = b.option(bool, "jack", "Enables/disables the JACK backend.") orelse false,
+        .pulseaudio = b.option(bool, "pulseaudio", "Enables/disables the pulseaudio backend.") orelse target.isLinux(),
+        .alsa = b.option(bool, "alsa", "Enables/disables the alsa backend.") orelse target.isLinux(),
+        .coreaudio = b.option(bool, "coreaudio", "Enables/disables the CoreAudio backend.") orelse target.isDarwin(),
+        .wasapi = b.option(bool, "wasapi", "Enables/disables the WASAPI backend.") orelse target.isWindows(),
+    };
 
     if (target.isLinux() and !target.isGnuLibC() and (render_backend == .vulkan or render_backend == .opengl or render_backend == .opengl_es)) {
         @panic("OpenGL, Vulkan and OpenGL ES require linking against glibc, musl is not supported!");
@@ -264,6 +280,73 @@ pub fn build(b: *std.build.Builder) !void {
         try std.fs.cwd().writeFile("zig-cache/resources.zig", resources_list.items);
     }
 
+    const libsoundio = blk: {
+        const root = "./deps/libsoundio";
+
+        const lib = b.addStaticLibrary("soundio", null);
+
+        const cflags = [_][]const u8{
+            "-std=c11",
+            "-fvisibility=hidden",
+            "-Wall",
+            "-Werror=strict-prototypes",
+            "-Werror=old-style-definition",
+            "-Werror=missing-prototypes",
+            "-Wno-missing-braces",
+        };
+
+        lib.defineCMacro("_REENTRANT");
+        lib.defineCMacro("_POSIX_C_SOURCE=200809L");
+
+        lib.defineCMacro("SOUNDIO_VERSION_MAJOR=2");
+        lib.defineCMacro("SOUNDIO_VERSION_MINOR=0");
+        lib.defineCMacro("SOUNDIO_VERSION_PATCH=0");
+        lib.defineCMacro("SOUNDIO_VERSION_STRING=\"2.0.0\"");
+
+        var sources = [_][]const u8{
+            root ++ "/src/soundio.c",
+            root ++ "/src/util.c",
+            root ++ "/src/os.c",
+            root ++ "/src/dummy.c",
+            root ++ "/src/channel_layout.c",
+            root ++ "/src/ring_buffer.c",
+        };
+
+        for (sources) |src| {
+            lib.addCSourceFile(src, &cflags);
+        }
+
+        if (audio_config.jack) lib.addCSourceFile(root ++ "/src/jack.c", &cflags);
+        if (audio_config.pulseaudio) lib.addCSourceFile(root ++ "/src/pulseaudio.c", &cflags);
+        if (audio_config.alsa) lib.addCSourceFile(root ++ "/src/alsa.c", &cflags);
+        if (audio_config.coreaudio) lib.addCSourceFile(root ++ "/src/coreaudio.c", &cflags);
+        if (audio_config.wasapi) lib.addCSourceFile(root ++ "/src/wasapi.c", &cflags);
+
+        if (audio_config.jack) lib.defineCMacro("SOUNDIO_HAVE_JACK");
+        if (audio_config.pulseaudio) lib.defineCMacro("SOUNDIO_HAVE_PULSEAUDIO");
+        if (audio_config.alsa) lib.defineCMacro("SOUNDIO_HAVE_ALSA");
+        if (audio_config.coreaudio) lib.defineCMacro("SOUNDIO_HAVE_COREAUDIO");
+        if (audio_config.wasapi) lib.defineCMacro("SOUNDIO_HAVE_WASAPI");
+
+        if (audio_config.jack) lib.linkSystemLibrary("jack");
+
+        if (audio_config.pulseaudio) lib.linkSystemLibrary("libpulse");
+
+        if (audio_config.alsa) lib.linkSystemLibrary("alsa");
+
+        if (audio_config.coreaudio) @panic("Audio for MacOS not implemented. Please find the correct libraries and stuff.");
+
+        // if (audio_config.wasapi) lib.linkSystemLibrary("");
+
+        lib.linkLibC();
+        lib.linkSystemLibrary("m");
+
+        lib.addIncludeDir(root);
+        lib.addIncludeDir("src/soundio");
+
+        break :blk lib;
+    };
+
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
         addClientPackages(client, target, render_backend, gen_vk);
@@ -273,13 +356,29 @@ pub fn build(b: *std.build.Builder) !void {
         client.addBuildOption(u16, "default_port", default_port);
         client.addBuildOption(RenderBackend, "render_backend", render_backend);
 
+        client.linkLibrary(libsoundio);
+
         client.setTarget(target);
         client.setBuildMode(mode);
 
-        if (mode != .Debug) {
-            // TODO: Workaround for
-            client.linkLibC();
-            client.linkSystemLibrary("m");
+        // Needed for libsoundio:
+        client.linkLibC();
+        client.linkSystemLibrary("m");
+
+        if (audio_config.jack) {
+            client.linkSystemLibrary("jack");
+        }
+        if (audio_config.pulseaudio) {
+            client.linkSystemLibrary("libpulse");
+        }
+        if (audio_config.alsa) {
+            client.linkSystemLibrary("alsa");
+        }
+        if (audio_config.coreaudio) {
+            @panic("Audio for MacOS not implemented. Please find the correct libraries and stuff.");
+        }
+        if (audio_config.wasapi) {
+            // client.linkSystemLibrary("");
         }
 
         client.install();

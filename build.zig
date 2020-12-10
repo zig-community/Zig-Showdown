@@ -386,7 +386,9 @@ pub fn build(b: *std.build.Builder) !void {
             @panic("Audio for MacOS not implemented. Please find the correct libraries and stuff.");
         }
         if (audio_config.wasapi) {
-            client.linkSystemLibrary("uuid"); // this is required for soundio
+            // this is required for soundio
+            client.linkSystemLibrary("uuid");
+            client.linkSystemLibrary("ole32"); 
         }
 
         client.install();

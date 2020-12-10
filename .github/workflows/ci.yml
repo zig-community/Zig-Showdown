@@ -26,14 +26,20 @@ jobs:
         uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
-      
+
+      # This is only required for linux systems that use pulseaudio
+      - name: Install OpenGL
+        if: ${{ matrix.platform == 'ubuntu-latest' }}
+        uses: mstksg/get-package@v1
+        with:
+          apt-get: libpulse-dev
+
       # This is only required for OpenGL builds on linux systems
       - name: Install OpenGL
         if: ${{ matrix.platform == 'ubuntu-latest' && matrix.renderer == 'opengl' }}
         uses: mstksg/get-package@v1
         with:
           apt-get: mesa-common-dev libgl1-mesa-dev
-
 
       - name: Run test suite
         run: zig build test

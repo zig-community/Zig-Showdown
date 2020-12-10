@@ -365,6 +365,8 @@ pub fn build(b: *std.build.Builder) !void {
         client.linkLibC();
         client.linkSystemLibrary("m");
 
+        client.addIncludeDir("./deps/libsoundio");
+
         if (audio_config.jack) {
             client.linkSystemLibrary("jack");
         }

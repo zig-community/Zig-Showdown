@@ -10,6 +10,7 @@ const Input = @import("Input.zig");
 
 const Resources = @import("Resources.zig");
 const ConfigFile = @import("ConfigFile.zig");
+const Audio = @import("Audio.zig");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
@@ -89,6 +90,9 @@ pub fn main() anyerror!u8 {
 
     // Do not init windowing before necessary. We don't need a window
     // for printing a help string.
+
+    var audio = try Audio.init(global_allocator);
+    defer audio.deinit();
 
     var platform = try WindowPlatform.init(global_allocator, .{});
     defer platform.deinit();

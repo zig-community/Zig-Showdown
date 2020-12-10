@@ -290,6 +290,8 @@ pub fn build(b: *std.build.Builder) !void {
         const root = "./deps/libsoundio";
 
         const lib = b.addStaticLibrary("soundio", null);
+        lib.setBuildMode(mode);
+        lib.setTarget(target);
 
         const cflags = [_][]const u8{
             "-std=c11",

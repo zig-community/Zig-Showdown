@@ -23,11 +23,8 @@ pub const Model = struct {
 };
 
 const UiVertex = extern struct {
-    // align is required to insert the correct padding for the GPU
-    // the GPU doesn't like non-16 aligned vertex data on some machines
-    // (windows 10, intel 520)
-    x: i16 align(16),
-    y: i16,
+    x: i32,
+    y: i32,
     u: f16,
     v: f16,
     r: u8,
@@ -185,7 +182,7 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self
             vao,
             VA_UI_POSITION,
             2,
-            gl.UNSIGNED_SHORT,
+            gl.INT,
             @byteOffsetOf(UiVertex, "x"),
         );
         DSA.vertexArrayAttribFormat(

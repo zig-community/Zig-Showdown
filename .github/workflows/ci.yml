@@ -27,12 +27,12 @@ jobs:
         with:
           version: master
 
-      # This is only required for linux systems that use pulseaudio
-      - name: Install OpenGL
+      # This is only required for linux systems that use pulseaudio/alsa
+      - name: Install Audio Libraries
         if: ${{ matrix.platform == 'ubuntu-latest' }}
         uses: mstksg/get-package@v1
         with:
-          apt-get: libpulse-dev
+          apt-get: libpulse-dev libasound2-dev
 
       # This is only required for OpenGL builds on linux systems
       - name: Install OpenGL

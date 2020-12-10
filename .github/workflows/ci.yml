@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         platform: [ubuntu-latest, windows-latest]
-        renderer: [software, opengl]
+        renderer: [software, opengl, vulkan]
     runs-on: ${{ matrix.platform }}
 
     steps:

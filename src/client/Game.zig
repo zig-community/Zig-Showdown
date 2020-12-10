@@ -20,6 +20,7 @@ const states = struct {
     pub const Options = @import("states/Options.zig");
     pub const PauseMenu = @import("states/PauseMenu.zig");
     pub const Splash = @import("states/Splash.zig");
+    pub const DemoPause = @import("states/DemoPause.zig");
 };
 
 const State = build_options.State;
@@ -33,6 +34,7 @@ const State = build_options.State;
 //     options,
 //     pause_menu,
 //     splash,
+//     demo_pause,
 // };
 
 const StateTransition = struct {
@@ -60,6 +62,7 @@ main_menu: states.MainMenu,
 options: states.Options,
 pause_menu: states.PauseMenu,
 splash: states.Splash,
+demo_pause: states.DemoPause,
 
 running: bool = true,
 
@@ -91,6 +94,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .options = try states.Options.init(resources),
         .pause_menu = try states.PauseMenu.init(resources),
         .splash = states.Splash.init(allocator),
+        .demo_pause = states.DemoPause.init(),
 
         .font_id = try resources.fonts.getName("/assets/font.tex"),
     };
@@ -137,6 +141,7 @@ fn callOnState(self: *Self, state: State, comptime fun: []const u8, args: anytyp
         .options => return H.maybeCall(&self.options, args),
         .pause_menu => return H.maybeCall(&self.pause_menu, args),
         .splash => return H.maybeCall(&self.splash, args),
+        .demo_pause => return H.maybeCall(&self.demo_pause, args),
     }
 }
 
@@ -174,6 +179,8 @@ pub fn update(self: *Self, input: Input, delta_time: f32) !void {
                         .main_menu => .slice_tr_to_bl,
                         else => .in_and_out,
                     }),
+
+                    .demo_pause => .blink,
 
                     else => .in_and_out,
                 },

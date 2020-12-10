@@ -6,6 +6,7 @@ const Renderer = @import("../../../Renderer.zig");
 const Color = @import("../../Color.zig");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
+const Swapchain = @import("Swapchain.zig");
 const system = std.os.system;
 const Allocator = std.mem.Allocator;
 pub const log = std.log.scoped(.vulkan);
@@ -22,6 +23,7 @@ const app_info = vk.ApplicationInfo{
 
 const instance_extensions = [_][*:0]const u8{
     vk.extension_info.khr_surface.name,
+    vk.extension_info.khr_xlib_surface.name,
     // TODO: Extend with platform types
 };
 
@@ -32,6 +34,7 @@ const device_extensions = [_][*:0]const u8{
 libvulkan: std.DynLib,
 instance: Instance,
 device: Device,
+surface: vk.SurfaceKHR,
 
 pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
     log.info("Initializing Vulkan rendering backend", .{});
@@ -53,7 +56,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
     const surface = try instance.createSurface(window);
     errdefer instance.vki.destroySurfaceKHR(instance.handle, surface, null);
 
-    const device = instance.findAndCreateDevice(allocator, .{
+    var device = instance.findAndCreateDevice(allocator, .{
         .surface = surface,
         .required_extensions = &device_extensions,
     }) catch |err| switch (err) {
@@ -67,14 +70,27 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
 
     log.info("Using device '{}'", .{ device.pdev.name() });
 
+    const window_dim = window.getSize();
+    const qfi = device.uniqueQueueFamilies();
+    var swapchain = try Swapchain.init(&instance, &device, allocator, .{
+        .surface = surface,
+        .vsync = false,
+        .desired_extent = .{.width = window_dim[0], .height = window_dim[1]},
+        .swap_image_usage = .{.color_attachment_bit = true},
+        .queue_family_indices = qfi.asConstSlice(),
+    });
+    defer swapchain.deinit(&device);
+
     return Self{
         .libvulkan = libvulkan,
         .instance = instance,
         .device = device,
+        .surface = surface,
     };
 }
 
 pub fn deinit(self: *Self) void {
+    self.instance.vki.destroySurfaceKHR(self.instance.handle, self.surface, null);
     self.device.deinit();
     self.instance.deinit();
     self.libvulkan.close();

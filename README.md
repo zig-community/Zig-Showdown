@@ -5,7 +5,7 @@ A community effort to create a small multiplayer 3D shooter game in pure zig
 
 ### Communication
 
-The main communication happens via the [Zig Showtime](https://zig.show/) discord.
+The main communication happens via the [Zig Showtime](https://discord.gg/p4bUwnf92n) discord. Please join if you want to participate!
 
 ### Contribution
 
@@ -43,12 +43,18 @@ The following build targets are available:
 
 The following build options are available:
 
-| Option               | Allowed Values | Default Value     | Effect                     |
-|----------------------|----------------|-------------------|----------------------------|
-| `default_port`       | `u16`          | 3315              | Sets the default game port |
-| `initial_state`      | `create_server`, `create_sp_game`, `credits`, `gameplay`, `join_game`, `main_menu`, `options`, `pause_menu`, `splash` | `splash` | Sets the initial state of the game, changing where the game starts. This allows improved debugging for stuff like `gameplay` or `options` where waiting for the normal game flow to finish is too long. |
-| `enable-fps-counter` | `bool`         | `true` when Debug | When enabled, displays a text that shows frame time in ms and frame rate in fps. |
-| `embed-resources`    | `bool`         | `false`           | When enabled, the `assets` folder is embedded into the final executable, creating a single-file game. |
+| Option               | Allowed Values | Default Value      | Effect                     |
+|----------------------|----------------|--------------------|----------------------------|
+| `default_port`       | `u16`          | 3315               | Sets the default game port |
+| `initial_state`      | `create_server`, `create_sp_game`, `credits`, `gameplay`, `join_game`, `main_menu`, `options`, `pause_menu`, `splash`  | `splash` | Sets the initial state of the game, changing where the game starts. This allows improved debugging for stuff like `gameplay` or `options` where waiting for the normal game flow to finish is too long. |
+| `enable-fps-counter` | `bool`         | `true` when Debug  | When enabled, displays a text that shows frame time in ms and frame rate in fps. |
+| `embed-resources`    | `bool`         | `false`            | When enabled, the `assets` folder is embedded into the final executable, creating a single-file game. |
+| `renderer`           | `software`, `opengl` | `software` | Sets the given value as the rendering backend for the game. This allows to exchange the used graphics APIs. |
+| `jack`               | `bool`         | `false`            | Enables the JACK audio backend |
+| `pulseaudio`         | `bool`         | Enabled on Linux   | Enables the PulseAudio audio backend |
+| `alsa`               | `bool`         | Enabled on Linux   | Enables the ALSA audio backend |
+| `coreaudio`          | `bool`         | Enabled on MacOS   | Enables the CoreAudio audio backend |
+| `wasapi`             | `bool`         | Enabled on Windows | Enables the WASAPI audio backend |
 
 ### OpenGL Loader
 

@@ -10,6 +10,7 @@ const Input = @import("Input.zig");
 
 const Resources = @import("Resources.zig");
 const ConfigFile = @import("ConfigFile.zig");
+const Audio = @import("Audio.zig");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
@@ -90,6 +91,9 @@ pub fn main() anyerror!u8 {
     // Do not init windowing before necessary. We don't need a window
     // for printing a help string.
 
+    var audio = try Audio.init(global_allocator);
+    defer audio.deinit();
+
     var platform = try WindowPlatform.init(global_allocator, .{});
     defer platform.deinit();
 
@@ -109,7 +113,8 @@ pub fn main() anyerror!u8 {
         .backend = switch (build_options.render_backend) {
             .software => .software,
             .opengl => zwl.Backend{ .opengl = .{ .major = 3, .minor = 3 } },
-            .vulkan, .vulkan_rt => .vulkan,
+            // TODO: Change to .vulkan when the ZWL Xlib backend does not depends on GL anymore.
+            .vulkan, .vulkan_rt => .none,
             else => @compileError("unsupported render backend!"),
         },
     });
@@ -251,4 +256,5 @@ fn printUsage(writer: anytype) !void {
 test "" {
     _ = @import("resource_pool.zig");
     _ = @import("resources/Model.zig");
+    _ = @import("states/gameplay/ec.zig");
 }

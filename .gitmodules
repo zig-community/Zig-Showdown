@@ -19,9 +19,6 @@
 [submodule "deps/wavefront-obj"]
 	path = deps/wavefront-obj
 	url = https://github.com/ziglibs/wavefront-obj.git
-[submodule "deps/stb"]
-	path = deps/stb
-	url = https://github.com/nothings/stb
 [submodule "deps/zzz"]
 	path = deps/zzz
 	url = https://github.com/gruebite/zzz
@@ -31,3 +28,9 @@
 [submodule "deps/Vulkan-Docs"]
 	path = deps/Vulkan-Docs
 	url = https://github.com/KhronosGroup/Vulkan-Docs
+[submodule "deps/zigimg"]
+	path = deps/zigimg
+	url = https://github.com/zigimg/zigimg
+[submodule "deps/libsoundio"]
+	path = deps/libsoundio
+	url = https://github.com/andrewrk/libsoundio

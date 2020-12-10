@@ -200,7 +200,7 @@ pub fn soundio_get_bytes_per_second(arg_format: Format, arg_channel_count: c_int
 pub extern fn soundio_format_string(format: Format) [*:0]const u8;
 
 pub const ChannelLayout = extern struct {
-    name: [*:0]const u8,
+    name: ?[*:0]const u8,
     channel_count: c_int,
     channels: [24]ChannelId,
 
@@ -235,7 +235,7 @@ pub const SoundIo = extern struct {
     on_backend_disconnect: ?fn (*SoundIo, c_int) callconv(.C) void,
     on_events_signal: ?fn (*SoundIo) callconv(.C) void,
     current_backend: Backend,
-    app_name: [*:0]const u8,
+    app_name: ?[*:0]const u8,
     emit_rtprio_warning: ?fn () callconv(.C) void,
     jack_info_callback: ?fn ([*c]const u8) callconv(.C) void,
     jack_error_callback: ?fn ([*c]const u8) callconv(.C) void,
@@ -283,7 +283,7 @@ pub extern fn soundio_default_output_device_index(soundio: *SoundIo) c_int;
 pub const Device = extern struct {
     soundio: *SoundIo,
     id: [*:0]u8,
-    name: [*:0]u8,
+    name: ?[*:0]u8,
     aim: DeviceAim,
     layouts: [*]ChannelLayout,
     layout_count: c_int,
@@ -332,7 +332,7 @@ pub const OutStream = extern struct {
     write_callback: ?fn (*OutStream, c_int, c_int) callconv(.C) void,
     underflow_callback: ?fn (*OutStream) callconv(.C) void,
     error_callback: ?fn (*OutStream, c_int) callconv(.C) void,
-    name: [*:0]const u8,
+    name: ?[*:0]const u8,
     non_terminal_hint: bool,
     bytes_per_frame: c_int,
     bytes_per_sample: c_int,
@@ -370,7 +370,7 @@ pub const InStream = extern struct {
     read_callback: ?fn (*InStream, c_int, c_int) callconv(.C) void,
     overflow_callback: ?fn (*InStream) callconv(.C) void,
     error_callback: ?fn (*InStream, c_int) callconv(.C) void,
-    name: [*:0]const u8,
+    name: ?[*:0]const u8,
     non_terminal_hint: bool,
     bytes_per_frame: c_int,
     bytes_per_sample: c_int,

@@ -257,4 +257,5 @@ test "" {
     _ = @import("resource_pool.zig");
     _ = @import("resources/Model.zig");
     _ = @import("states/gameplay/ec.zig");
+    _ = @import("Audio.zig");
 }

@@ -1,9 +1,7 @@
 const std = @import("std");
 const log = std.log.scoped(.audio);
 
-const c = @cImport({
-    @cInclude("soundio/soundio.h");
-});
+const c = @import("soundio");
 
 const Self = @This();
 
@@ -14,19 +12,18 @@ device: *c.SoundIoDevice,
 
 seconds_offset: f32 = 0.0,
 
-fn writeCallback(outstream: [*c]c.SoundIoOutStream, frame_count_min: c_int, frame_count_max: c_int) callconv(.C) void {
-    const self = @ptrCast(*Self, @alignCast(@alignOf(Self), outstream.*.userdata));
-    const layout = &outstream.*.layout;
-    const float_sample_rate = @intToFloat(f32, outstream.*.sample_rate);
+fn writeCallback(outstream: *c.SoundIoOutStream, frame_count_min: c_int, frame_count_max: c_int) callconv(.C) void {
+    const self = @ptrCast(*Self, @alignCast(@alignOf(Self), outstream.userdata));
+    const layout = &outstream.layout;
+    const float_sample_rate = @intToFloat(f32, outstream.sample_rate);
     const seconds_per_frame = 1.0 / float_sample_rate;
     var frames_left = frame_count_max;
 
     while (frames_left > 0) {
         var frame_count = frames_left;
 
-        var c_areas: [*c]c.SoundIoChannelArea = undefined;
-        trySound(c.soundio_outstream_begin_write(outstream, &c_areas, &frame_count)) catch @panic("unexpected sound error");
-        const areas = &c_areas.*;
+        var areas: [*]c.SoundIoChannelArea = undefined;
+        trySound(c.soundio_outstream_begin_write(outstream, &areas, &frame_count)) catch @panic("unexpected sound error");
 
         if (frame_count == 0)
             break;
@@ -54,7 +51,7 @@ fn trySound(err: c_int) !void {
 
     log.err("{}", .{std.mem.span(c.soundio_strerror(err))});
 
-    return switch (@intToEnum(c.enum_SoundIoError, err)) {
+    return switch (@intToEnum(c.SoundIoError, err)) {
         .None => unreachable,
         .NoMem => error.OutOfMemory,
         .InitAudioBackend => error.InitAudioBackend,
@@ -94,8 +91,8 @@ pub fn init(allocator: *std.mem.Allocator) !*Self {
 
     var outstream = c.soundio_outstream_create(device) orelse return error.OutOfMemory;
     errdefer c.soundio_outstream_destroy(outstream);
-    outstream.*.format = if (std.builtin.endian == .Little) c.enum_SoundIoFormat.Float32LE else c.enum_SoundIoFormat.Float32BE;
-    outstream.*.write_callback = writeCallback;
+    outstream.format = if (std.builtin.endian == .Little) c.SoundIoFormat.Float32LE else c.SoundIoFormat.Float32BE;
+    outstream.write_callback = writeCallback;
 
     const self = try allocator.create(Self);
     errdefer allocator.destroy(self);
@@ -107,11 +104,11 @@ pub fn init(allocator: *std.mem.Allocator) !*Self {
         .device = device,
     };
 
-    outstream.*.userdata = self;
+    outstream.userdata = self;
 
     try trySound(c.soundio_outstream_open(outstream));
 
-    try trySound(outstream.*.layout_error);
+    try trySound(outstream.layout_error);
 
     try trySound(c.soundio_outstream_start(outstream));
 

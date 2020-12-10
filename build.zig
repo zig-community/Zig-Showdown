@@ -59,6 +59,11 @@ const pkgs = struct {
         .name = "showdown-resources",
         .path = "./zig-cache/resources.zig", // Written by this file
     };
+
+    const soundio = std.build.Pkg{
+        .name = "soundio",
+        .path = "./deps/soundio.zig/soundio.zig",
+    };
 };
 
 const vk_xml_path = "deps/Vulkan-Docs/xml/vk.xml";
@@ -108,6 +113,7 @@ fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget,
     exe.addPackage(pkgs.zlm);
     exe.addPackage(pkgs.zzz);
     exe.addPackage(pkgs.resources);
+    exe.addPackage(pkgs.soundio);
 
     switch (render_backend) {
         .vulkan, .vulkan_rt => {
@@ -364,8 +370,6 @@ pub fn build(b: *std.build.Builder) !void {
         // Needed for libsoundio:
         client.linkLibC();
         client.linkSystemLibrary("m");
-
-        client.addIncludeDir("./deps/libsoundio");
 
         if (audio_config.jack) {
             client.linkSystemLibrary("jack");

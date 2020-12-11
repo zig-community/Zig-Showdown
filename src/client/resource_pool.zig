@@ -378,9 +378,9 @@ test "ResourceManager" {
         std.testing.expectEqual(n0_2, n0_3);
         std.testing.expect(n0_1 != n1);
 
-        var font_id = try manager.getName("/assets-in/font.tex");
-        var potato_id = try manager.getName("/assets-in/potato.tex");
-        var floor_id = try manager.getName("/assets-in/bad_floor.tex");
+        var font_id = try manager.getName("/assets-in/font.tga");
+        var potato_id = try manager.getName("/assets-in/potato.tga");
+        var floor_id = try manager.getName("/assets-in/bad_floor.tga");
 
         const font_1 = try manager.get(font_id, 0x01);
         const font_2 = try manager.get(font_id, 0x01);

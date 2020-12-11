@@ -328,7 +328,7 @@ const platform_impls = struct {
                 path[1..],
                 100 * 1024 * 1024, // 100MB per resource should be enough *for now*
                 null,
-                @alignOf(View), // large alignment,
+                std.meta.alignment(View), // large alignment,
                 null,
             );
             errdefer self.allocator.free(buffer);

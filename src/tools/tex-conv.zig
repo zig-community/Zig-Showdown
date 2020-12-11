@@ -14,12 +14,10 @@ pub fn main() !u8 {
     }, allocator);
     defer cli.deinit();
 
-    if (cli.positionals.len != 1)
+    if (cli.positionals.len != 2)
         return 1;
 
-    var out_file = try allocator.dupe(u8, cli.positionals[0]);
-    out_file[out_file.len - 4 ..][0..4].* = ".tex".*;
-    defer allocator.free(out_file);
+    var out_file = cli.positionals[1];
 
     var src_data = try std.fs.cwd().readFileAlloc(allocator, cli.positionals[0], 1 << 30);
     defer allocator.free(src_data);

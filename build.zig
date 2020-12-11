@@ -190,6 +190,17 @@ pub fn build(b: *std.build.Builder) !void {
         "When set, the resources will be embedded into the binary.",
     ) orelse false;
 
+    const debug_tools = b.option(
+        bool,
+        "debug-tools",
+        "When set, the tools will be compiled in Debug mode, ReleaseSafe otherwise.",
+    ) orelse false;
+
+    const tool_mode: std.builtin.Mode = if (debug_tools)
+        .Debug
+    else
+        .ReleaseSafe;
+
     var audio_config = AudioConfig{
         .jack = b.option(bool, "jack", "Enables/disables the JACK backend.") orelse false,
         .pulseaudio = b.option(bool, "pulseaudio", "Enables/disables the pulseaudio backend.") orelse target.isLinux(),
@@ -210,13 +221,13 @@ pub fn build(b: *std.build.Builder) !void {
         obj_conv.addPackage(pkgs.zlm);
         obj_conv.addPackage(pkgs.wavefront_obj);
         obj_conv.setTarget(native_target);
-        obj_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
+        obj_conv.setBuildMode(tool_mode);
 
         const tex_conv = b.addExecutable("tex-conv", "src/tools/tex-conv.zig");
         tex_conv.addPackage(pkgs.args);
         tex_conv.addPackage(pkgs.zigimg);
         tex_conv.setTarget(native_target);
-        tex_conv.setBuildMode(.ReleaseSafe); // this should run at least optimized
+        tex_conv.setBuildMode(tool_mode);
         tex_conv.linkLibC();
 
         const tools_step = b.step("tools", "Compiles all tools required in the build process");
@@ -237,21 +248,22 @@ pub fn build(b: *std.build.Builder) !void {
 
             try writer.writeAll("pub const files = .{\n");
 
-            var walker = try std.fs.walkPath(b.allocator, "assets");
+            const assets_src_folder = "assets-in";
+
+            var walker = try std.fs.walkPath(b.allocator, assets_src_folder);
             defer walker.deinit();
 
+            try std.fs.cwd().makePath("zig-cache");
+
             while (try walker.next()) |entry| {
-                var extension: ?[]const u8 = null;
+                var extension: []const u8 = undefined;
+                var convert_file: *std.build.RunStep = undefined;
 
                 if (std.mem.endsWith(u8, entry.path, ".obj")) {
-                    const convert_file = obj_conv.run();
-                    convert_file.addArg(entry.path);
-                    assets_step.dependOn(&convert_file.step);
+                    convert_file = obj_conv.run();
                     extension = "mdl";
                 } else if (std.mem.endsWith(u8, entry.path, ".png") or std.mem.endsWith(u8, entry.path, ".tga") or std.mem.endsWith(u8, entry.path, ".bmp")) {
-                    const convert_file = tex_conv.run();
-                    convert_file.addArg(entry.path);
-                    assets_step.dependOn(&convert_file.step);
+                    convert_file = tex_conv.run();
                     extension = "tex";
                 } else {
                     continue;
@@ -269,14 +281,27 @@ pub fn build(b: *std.build.Builder) !void {
                 else
                     "";
 
+                const output_file = try std.mem.concat(b.allocator, u8, &[_][]const u8{
+                    "assets/",
+                    file_without_ext[assets_src_folder.len + 1 ..],
+                    ".",
+                    extension,
+                });
+
+                try std.fs.cwd().makePath(std.fs.path.dirname(output_file) orelse unreachable);
+
+                convert_file.addArg(entry.path);
+                convert_file.addArg(output_file);
+                assets_step.dependOn(&convert_file.step);
+
                 if (embed_resources) {
                     // files are in zig-cache/../assets
-                    try writer.print("    .@\"/{}.{}\" = @alignCast(64, @embedFile(\"../{}.{}\")),\n", .{
-                        file_without_ext, extension.?,
-                        file_without_ext, extension.?,
+                    try writer.print("    .@\"/{}\" = @alignCast(64, @embedFile(\"../{}\")),\n", .{
+                        output_file,
+                        output_file,
                     });
                 } else {
-                    try writer.print("    .@\"/{}.{}\" = {{}},\n", .{ file_without_ext, extension.? });
+                    try writer.print("    .@\"/{}\" = {{}},\n", .{output_file});
                 }
             }
 

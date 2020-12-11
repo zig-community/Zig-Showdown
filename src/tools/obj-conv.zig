@@ -15,15 +15,13 @@ pub fn main() !u8 {
     }, allocator);
     defer cli.deinit();
 
-    if (cli.positionals.len != 1)
+    if (cli.positionals.len != 2)
         return 1;
 
-    var out_file = try allocator.dupe(u8, cli.positionals[0]);
-    out_file[out_file.len - 4 ..][0..4].* = ".mdl".*;
-    defer allocator.free(out_file);
+    var out_file = cli.positionals[1];
 
     var mtl_file_name = try allocator.dupe(u8, cli.positionals[0]);
-    mtl_file_name[out_file.len - 4 ..][0..4].* = ".mtl".*;
+    mtl_file_name[cli.positionals[0].len - 4 ..][0..4].* = ".mtl".*;
     defer allocator.free(mtl_file_name);
 
     var obj_file = try std.fs.cwd().openFile(cli.positionals[0], .{});

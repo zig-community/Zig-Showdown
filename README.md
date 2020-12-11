@@ -7,6 +7,30 @@ A community effort to create a small multiplayer 3D shooter game in pure zig
 
 The main communication happens via the [Zig Showtime](https://discord.gg/p4bUwnf92n) discord. Please join if you want to participate!
 
+### Asset Building
+
+Assets are spread over 3 different folders:
+- `assets`: Contains the final assets that will be shipped with the game. This folder is completly auto-generated and the folder is not included in the repository.
+- `assets-in`: Intermediate asset files in commonly editable formats like png, obj. These files get compiled in the `zig build assets` step into a file into `assets`.
+- `assets-src`: Source formats for the files that are from the original editor. Files here are for example blender or gimp project files.
+
+When invoking `zig build assets`, the build system will search for files in `assets-in` and will translate them into the game-custom format which are stored in `assets`.
+
+Assets that don't need to be converted will just be copied flat into the `assets` folder.
+
+#### Translation Table
+
+This table lists all implemented (or planned) asset file associations:
+
+| Input File | Target File Extension | Resource Type |
+|------------|-----------------------|---------------|
+| `*.png`    | `.tex`                | `Texture`     |
+| `*.tga`    | `.tex`                | `Texture`     |
+| `*.bmp`    | `.tex`                | `Texture`     |
+| `*.obj`    | `.mdl`                | `Model`       |
+| `*.wav`    | `.snd`                | `Sound` (https://github.com/zig-community/Zig-Showdown/issues/9)  |
+| `*.ogg`    | `.mus`                | `Music` (https://github.com/zig-community/Zig-Showdown/issues/11) |
+
 ### Contribution
 
 ### Checkout
@@ -55,6 +79,7 @@ The following build options are available:
 | `alsa`               | `bool`         | Enabled on Linux   | Enables the ALSA audio backend |
 | `coreaudio`          | `bool`         | Enabled on MacOS   | Enables the CoreAudio audio backend |
 | `wasapi`             | `bool`         | Enabled on Windows | Enables the WASAPI audio backend |
+| `debug-tools`        | `bool`         | `false`            | Tools are usually built in `ReleaseSafe` mode for performance, but when working on the tools, it's better to compile them in `Debug` mode. Setting this flag does this. |
 
 ### OpenGL Loader
 
@@ -69,5 +94,5 @@ cd /path/to/zig-opengl
 make generator.exe
 
 # Create our OpenGL 3.3 + GL_ARB_direct_state_access
-mono generator.exe OpenGL-Registry/xml/gl.xml $(SHOWDOWN_ROOT)/deps/opengl/gl_3v3_with_exts.zig GL_VERSION_3_3 GL_ARB_direct_state_access
+mono generator.exe OpenGL-Registry/xml/gl.xml $(SHOWDOWN_ROOT)/deps/opengl/gl_3v3_with_exts.zig GL_VERSION_3_3 GL_ARB_direct_state_access GL_KHR_debug
 ```

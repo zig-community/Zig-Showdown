@@ -4,9 +4,13 @@ const vk = @import("vulkan");
 const WindowPlatform = @import("../../../main.zig").WindowPlatform;
 const Renderer = @import("../../../Renderer.zig");
 const Color = @import("../../Color.zig");
+const Resources = @import("Resources.zig");
+
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
 const Swapchain = @import("Swapchain.zig");
+const UiPipeline = @import("UiPipeline.zig");
+
 const asManyPtr = @import("util.zig").asManyPtr;
 const Allocator = std.mem.Allocator;
 pub const log = std.log.scoped(.vulkan);
@@ -90,7 +94,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
     });
     errdefer swapchain.deinit(&device);
 
-    log.info("Created swapchain with surface {}", .{ @tagName(swapchain.surface_format.format) });
+    log.info("Created swapchain with surface format {}", .{ @tagName(swapchain.surface_format.format) });
 
     var frames: [frame_overlap]Frame = undefined;
     var n_successfully_created: usize = 0;
@@ -134,7 +138,7 @@ pub fn beginFrame(self: *Self) !void {
     try frame.wait(&self.device);
 
     const present_state = self.swapchain.acquireNextImage(&self.device, frame.image_acquired) catch |err| switch (err) {
-        error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
+        error.OutOfDateKHR => return error.OutOfDateKHR, // TODO: Catch and reinitialize swapchain
         else => |other| return other,
     };
 
@@ -165,19 +169,39 @@ pub fn endFrame(self: *Self) !void {
 
 pub fn clear(self: *Self, rt: Renderer.RenderTarget, color: Color) void {
     // stub
+    log.debug("clear", .{});
 }
 
 pub fn submitUiPass(self: *Self, render_target: Renderer.RenderTarget, pass: Renderer.UiPass) !void {
     // stub
+    log.debug("ui pass", .{});
 }
 
 pub fn submitScenePass(self: *Self, render_target: Renderer.RenderTarget, pass: Renderer.ScenePass) !void {
     // stub
+    log.debug("scene pass", .{});
 }
 
 pub fn submitTransition(self: *Self, render_target: Renderer.RenderTarget, transition: Renderer.Transition) !void {
     // stub
+    log.debug("transition pass", .{});
 }
+
+pub const Texture = void;
+
+pub fn createTexture(self: *Self, texture: *Resources.Texture) !Texture {
+    return {};
+}
+
+pub fn destroyTexture(self: *Self, texture: *Texture) void {}
+
+pub const Model = void;
+
+pub fn createModel(self: *Self, model: *Resources.Model) Texture {
+    return {};
+}
+
+pub fn destroyModel(self: *Self, model: *Model) void {}
 
 fn waitForAllFrames(self: *Self) !void {
     for (self.frames) |frame| try frame.wait(&self.device);

@@ -5,7 +5,7 @@ const Device = @import("Device.zig");
 const WindowPlatform = @import("../../../main.zig").WindowPlatform;
 const Allocator = std.mem.Allocator;
 const PhysicalDevice = Device.PhysicalDevice;
-const log = @import("Vulkan.zig").log;
+const log = @import("VulkanRenderer.zig").log;
 
 const Self = @This();
 

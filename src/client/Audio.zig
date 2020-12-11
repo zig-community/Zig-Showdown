@@ -2,6 +2,7 @@ const std = @import("std");
 const log = std.log.scoped(.audio);
 
 const soundio = @import("soundio");
+const resource_pool = @import("resource_pool.zig");
 
 const Self = @This();
 
@@ -10,9 +11,10 @@ interface: *soundio.SoundIo,
 outstream: *soundio.OutStream,
 device: *soundio.Device,
 
-current_time: usize = 0,
+event_pool: EventPool,
+event_queue: EventQueue,
 
-seconds_offset: f32 = 0.0,
+current_time: usize = 0,
 
 fn trySound(err: c_int) !void {
     if (err == 0)
@@ -65,8 +67,7 @@ pub fn init(allocator: *std.mem.Allocator) !*Self {
     outstream.format = if (std.builtin.endian == .Little) soundio.Format.Float32LE else soundio.Format.Float32BE;
     outstream.write_callback = writeCallback;
     outstream.name = "Game Audio";
-
-    log.info("outstream: {}", .{outstream});
+    outstream.software_latency = 1.0 / 30.0; // realtime application
 
     const self = try allocator.create(Self);
     errdefer allocator.destroy(self);
@@ -76,7 +77,11 @@ pub fn init(allocator: *std.mem.Allocator) !*Self {
         .interface = interface,
         .outstream = outstream,
         .device = device,
+
+        .event_pool = EventPool.init(allocator),
+        .event_queue = EventQueue.init(),
     };
+    errdefer self.event_pool.deinit();
 
     outstream.userdata = self;
 
@@ -84,19 +89,28 @@ pub fn init(allocator: *std.mem.Allocator) !*Self {
 
     try trySound(outstream.layout_error);
 
-    try trySound(outstream.start());
-
     return self;
 }
 
+/// Starts the audio playback
+pub fn start(self: *Self) !void {
+    try trySound(self.outstream.start());
+}
+
+/// Returns the time since the start of the audio playback
+pub fn getTime(self: Self) f32 {
+    return @intToFloat(f32, @atomicLoad(usize, &self.current_time, .Acquire)) / @intToFloat(f32, self.outstream.sample_rate);
+}
+
 pub fn update(self: *Self) !void {
-    self.interface.waitEvents();
+    self.interface.flushEvents();
 }
 
 pub fn deinit(self: *Self) void {
     self.outstream.destroy();
     self.device.unref();
     self.interface.destroy();
+    self.event_pool.deinit();
     self.allocator.destroy(self);
 }
 
@@ -110,50 +124,164 @@ pub const PlaybackOptions = struct {
     /// Defines the start time of the sound in seconds from *now*
     start_time: ?f32 = null,
 
-    /// Play the sound for `count` times. If `count` is `null`, it will be
-    /// repeated endlessly
-    count: ?usize = 1,
+    // TODO: Implement repeating sounds
+    // /// Play the sound for `count` times. If `count` is `null`, it will be
+    // /// repeated endlessly
+    // count: ?usize = 1,
 };
 
 pub const Sound = struct {
-    samples: []f32,
+    samples: []const f32,
+
+    pub fn loadSoundFromMemory(audio: *Self, allocator: *std.mem.Allocator, raw_data: resource_pool.BufferView, hint: []const u8) resource_pool.Error!Sound {
+        // TODO: resample audio files to the sample rate of audio.outbuffer.sample_rate
+        return Sound{
+            .samples = std.mem.bytesAsSlice(f32, raw_data),
+        };
+    }
+    pub fn freeSound(audio: *Self, allocator: *std.mem.Allocator, self: *Sound) void {
+        // nop
+    }
 };
 
-pub fn playSound(self: *Self, sound: *Sound, options: PlaybackOptions) !void {}
+pub fn playSound(self: *Self, sound: Sound, options: PlaybackOptions) !void {
+    const pleft = std.math.clamp(1.0 - options.pan, 0.0, 1.0); // pan=0 → pleft=1, pan=1 → pleft=0
+    const pright = std.math.clamp(1.0 + options.pan, 0.0, 1.0); // pan=0 → pright=1, pan=-1 → pleft=0
 
-fn writeCallback(outstream: *soundio.OutStream, frame_count_min: c_int, frame_count_max: c_int) callconv(.C) void {
+    const current_time = @atomicLoad(usize, &self.current_time, .Acquire);
+
+    const event = try self.event_pool.createEvent();
+    event.* = SoundEvent{
+        .sound = sound,
+        .left_vol = pleft * options.volume,
+        .right_vol = pright * options.volume,
+        .start_time = if (options.start_time) |start_time|
+            @panic("TODO: Implement start time calculation")
+        else
+            current_time,
+        .count = 0,
+    };
+
+    self.event_queue.enqueue(event);
+}
+
+fn writeCallback(outstream: *soundio.OutStream, _frame_count_min: c_int, _frame_count_max: c_int) callconv(.C) void {
+    const frame_count_min = @intCast(usize, _frame_count_min);
+    const frame_count_max = @intCast(usize, _frame_count_max);
+
     // this is called in a background thread, so we need some synchronization here!
     const self = @ptrCast(*Self, @alignCast(@alignOf(Self), outstream.userdata));
     const layout = &outstream.layout;
-    const float_sample_rate = @intToFloat(f32, outstream.sample_rate);
-    const seconds_per_frame = 1.0 / float_sample_rate;
+
     var frames_left = frame_count_max;
 
     while (frames_left > 0) {
-        var frame_count = frames_left;
+        var _frame_count: c_int = @intCast(c_int, frames_left);
 
         var areas: [*]soundio.ChannelArea = undefined;
-        trySound(outstream.beginWrite(&areas, &frame_count)) catch @panic("unexpected sound error");
+        trySound(outstream.beginWrite(&areas, &_frame_count)) catch @panic("unexpected sound error");
+
+        const frame_count = @intCast(usize, _frame_count);
+        const channels = areas[0..@intCast(usize, layout.channel_count)];
 
         if (frame_count == 0)
             break;
 
-        _ = @atomicRmw(usize, &self.current_time, .Add, @intCast(usize, frame_count), .SeqCst);
+        const end_time = self.current_time + frame_count;
 
-        const pitch = 440.0;
-        const radians_per_second = pitch * 2.0 * std.math.pi;
-        var frame: c_int = 0;
-        while (frame < frame_count) : (frame += 1) {
-            const sample = std.math.sin((self.seconds_offset + @intToFloat(f32, frame) * seconds_per_frame) * radians_per_second);
-            for (areas[0..@intCast(usize, layout.channel_count)]) |*chan| {
-                @ptrCast(*align(1) f32, chan.ptr + @intCast(usize, chan.step * frame)).* = sample;
+        // Basic idea of sound rendering here:
+        // Clear the buffer segment to silence,
+        // then add each sound event on top of the silence,
+        // then add a limiter and global audio effects
+        {
+            var frame: usize = 0;
+            while (frame < frame_count) : (frame += 1) {
+                for (channels) |*chan| {
+                    @ptrCast(*align(1) f32, chan.ptr + @intCast(usize, chan.step) * frame).* = 0;
+                }
             }
         }
-        self.seconds_offset = std.math.modf(self.seconds_offset + seconds_per_frame * @intToFloat(f32, frame_count)).fpart;
+
+        // Render all relevant audio parts here:
+        // Loop over the events, and for each event, loop over the samples.
+        // This is better for the cache than looping through all events for each sample
+
+        {
+            var events = self.event_queue.iterate();
+            defer events.deinit();
+
+            while (events.next()) |event| {
+
+                // Check if the events in the queue will happen after the currently processed
+                // samples. If so, we can stop the loop
+                if (event.start_time >= end_time)
+                    break;
+
+                // we can skip frames if we have overlap
+                const start_in_frame = if (event.start_time > self.current_time)
+                    event.start_time - self.current_time
+                else
+                    0;
+
+                const start_in_sound = if (self.current_time > event.start_time)
+                    self.current_time - event.start_time
+                else
+                    0;
+
+                // Sound did complete, remove it from the queue and return the event to the pool.
+                if (start_in_sound >= event.sound.samples.len) {
+                    self.event_pool.freeEvent(events.pop());
+                    continue;
+                }
+
+                // Sound didn't not start yet, just continue
+                if (start_in_frame > frame_count) {
+                    continue;
+                }
+
+                const count = std.math.min(frame_count - start_in_frame, event.sound.samples.len - start_in_sound);
+
+                // log.info("play sound t={d: <8} c={d: <8} o[s]={d: <8} o[f]={d: <8} d={d: <8} n={d: <8}", .{
+                //     self.current_time,
+                //     frame_count,
+                //     start_in_sound,
+                //     start_in_frame,
+                //     event.sound.samples.len,
+                //     count,
+                // });
+
+                var offset: usize = 0;
+                while (offset < count) : (offset += 1) {
+                    const sample = event.sound.samples[start_in_sound + offset];
+                    for (channels) |*chan, i| {
+                        const chan_sample = sample * switch (i % 2) {
+                            0 => event.left_vol,
+                            1 => event.right_vol,
+                            else => unreachable,
+                        };
+                        @ptrCast(*align(1) f32, chan.ptr + @intCast(usize, chan.step) * (start_in_frame + offset)).* += chan_sample;
+                    }
+                }
+            }
+        }
+
+        // Apply simple clamp limiting
+        {
+            var frame: usize = 0;
+            while (frame < frame_count) : (frame += 1) {
+                for (channels) |*chan| {
+                    const sample = @ptrCast(*align(1) f32, chan.ptr + @intCast(usize, chan.step) * frame);
+                    sample.* = std.math.clamp(sample.*, -1.0, 1.0);
+                }
+            }
+        }
 
         trySound(outstream.endWrite()) catch @panic("unexpected sound error");
 
         frames_left -= frame_count;
+
+        // Notify other threads that we changed current_time
+        _ = @atomicRmw(usize, &self.current_time, .Add, frame_count, .SeqCst);
     }
 }
 
@@ -161,7 +289,7 @@ const SoundEvent = struct {
     next: ?*SoundEvent = null,
     in_queue: bool = false,
 
-    sound: *Sound,
+    sound: Sound,
     left_vol: f32,
     right_vol: f32,
     start_time: usize,
@@ -408,3 +536,19 @@ test "EventQueue" {
         std.testing.expectEqual(@as(usize, 3), index);
     }
 }
+
+pub const Timer = struct {
+    previous: f32,
+
+    pub fn start(audio: Self) Timer {
+        return Timer{
+            .previous = audio.getTime(),
+        };
+    }
+
+    pub fn lap(self: *Timer, audio: Self) f32 {
+        const t = audio.getTime();
+        defer self.previous = t;
+        return t - self.previous;
+    }
+};

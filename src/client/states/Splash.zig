@@ -8,16 +8,19 @@ const theme = @import("../theme.zig");
 const Renderer = @import("../Renderer.zig");
 const Input = @import("../Input.zig");
 const Game = @import("../Game.zig");
+const Resources = @import("../Resources.zig");
 
 const Self = @This();
 
 allocator: *std.mem.Allocator,
+resources: *Resources,
 
 progress: f32 = 0.0,
 duration: f32,
 
-pub fn init(allocator: *std.mem.Allocator) Self {
+pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
     return Self{
+        .resources = resources,
         .allocator = allocator,
         .duration = 3.0,
     };

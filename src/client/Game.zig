@@ -7,6 +7,7 @@ const Self = @This();
 const Resources = @import("Resources.zig");
 const Renderer = @import("Renderer.zig");
 const Input = @import("Input.zig");
+const Audio = @import("Audio.zig");
 
 ///! The core management structure for the game. This is
 ///! mostly platform independent game logic and rendering implementation.
@@ -52,6 +53,7 @@ const StateAndTransition = union(enum) {
 
 allocator: *std.mem.Allocator,
 resources: *Resources,
+audio: *Audio,
 
 create_server: states.CreateServer,
 create_sp_game: states.CreateSpGame,
@@ -80,10 +82,11 @@ render_time: f32 = 0.0,
 // used resources:
 font_id: Resources.FontPool.ResourceName,
 
-pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
+pub fn init(allocator: *std.mem.Allocator, resources: *Resources, audio: *Audio) !Self {
     var game = Self{
         .allocator = allocator,
         .resources = resources,
+        .audio = audio,
 
         .create_server = try states.CreateServer.init(resources),
         .create_sp_game = try states.CreateSpGame.init(resources),
@@ -93,7 +96,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .main_menu = try states.MainMenu.init(allocator, resources),
         .options = try states.Options.init(resources),
         .pause_menu = try states.PauseMenu.init(resources),
-        .splash = states.Splash.init(allocator),
+        .splash = try states.Splash.init(allocator, resources),
         .demo_pause = states.DemoPause.init(),
 
         .font_id = try resources.fonts.getName("/assets/font.tex"),

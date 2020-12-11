@@ -123,7 +123,7 @@ pub fn main() anyerror!u8 {
     var renderer = try Renderer.init(global_allocator, window);
     defer renderer.deinit();
 
-    var resources = Resources.init(global_allocator, &renderer);
+    var resources = Resources.init(global_allocator, &renderer, audio);
     defer resources.deinit();
 
     // TODO: This is a ugly hack in the design and should be resolved
@@ -131,7 +131,7 @@ pub fn main() anyerror!u8 {
 
     var input = Input.init();
 
-    var game = try Game.init(global_allocator, &resources);
+    var game = try Game.init(global_allocator, &resources, audio);
     defer game.deinit();
 
     var update_timer = try std.time.Timer.start();
@@ -139,9 +139,12 @@ pub fn main() anyerror!u8 {
 
     const stretch_factor = 1.0 / cli.options.@"time-stretch";
 
-    main_loop: while (game.running) {
-        const event = try platform.waitForEvent();
+    try audio.start();
 
+    main_loop: while (game.running) {
+        try audio.update();
+
+        const event = try platform.waitForEvent();
         switch (event) {
             .WindowResized => |win| {
                 const size = win.getSize();

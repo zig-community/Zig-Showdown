@@ -70,6 +70,8 @@ background_ids: [3]Resources.TexturePool.ResourceName,
 logo_id: Resources.TexturePool.ResourceName,
 current_background: usize = 0,
 
+pling_sound: Resources.SoundPool.ResourceName,
+
 pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
     return Self{
         .resources = resources,
@@ -82,6 +84,8 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
             try resources.textures.getName("/assets/backgrounds/matte-03.tex"),
         },
         .logo_id = try resources.textures.getName("/assets/logo.tex"),
+
+        .pling_sound = try resources.sounds.getName("/assets/sounds/something.raw"),
     };
 }
 
@@ -128,8 +132,15 @@ pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void
     }
     if (input.isHit(.left_mouse)) {
         for (self.items) |item, i| {
-            if (item.last_rectangle.contains(input.mouse_x, input.mouse_y))
+            if (item.last_rectangle.contains(input.mouse_x, input.mouse_y)) {
                 self.triggerItem(i);
+                break;
+            }
+        } else {
+            try Game.fromComponent(self).audio.playSound(
+                try self.resources.sounds.get(self.pling_sound, Resources.usage.menu_render),
+                .{},
+            );
         }
     }
 }

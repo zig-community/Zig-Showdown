@@ -15,6 +15,7 @@ jobs:
       matrix:
         platform: [ubuntu-latest, windows-latest]
         renderer: [software, opengl, vulkan]
+        embedded_resources: [false, true]
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -44,11 +45,11 @@ jobs:
       - name: Run test suite
         run: zig build test
 
-      - name: Compile game binaries
-        run: zig build -Drenderer=${{ matrix.renderer }} install
-
       - name: Compile tool binaries
         run: zig build tools
 
       - name: Compile game assets
         run: zig build assets
+
+      - name: Compile game binaries
+        run: zig build -Dembed-resources=${{ matrix.embedded_resources }} -Drenderer=${{ matrix.renderer }} install

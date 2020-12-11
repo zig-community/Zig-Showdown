@@ -248,9 +248,9 @@ const platform_impls = struct {
     /// into the executable itself and is not present on disk.
     const Embedded = struct {
         const Self = @This();
-        pub const View = []const u8;
+        pub const View = []align(64) const u8;
 
-        data: []const u8,
+        data: View,
 
         pub fn init(allocator: *std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !Self {
             inline for (std.meta.fields(@TypeOf(resource_data.files))) |fld| {
@@ -316,17 +316,20 @@ const platform_impls = struct {
     /// Load the file via read() into memory and keep it there.
     const Fake = struct {
         const Self = @This();
-        pub const View = []u8;
+        pub const View = []align(64) u8;
 
         allocator: *std.mem.Allocator,
-        data: []u8,
+        data: View,
 
         pub fn init(allocator: *std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !Self {
             std.debug.assert(path.len > 1 and path[0] == '/');
-            const buffer = try dir.readFileAlloc(
+            const buffer = try dir.readFileAllocOptions(
                 allocator,
                 path[1..],
                 100 * 1024 * 1024, // 100MB per resource should be enough *for now*
+                null,
+                @alignOf(View), // large alignment,
+                null,
             );
             errdefer self.allocator.free(buffer);
 

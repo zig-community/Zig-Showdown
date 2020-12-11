@@ -271,7 +271,7 @@ pub fn build(b: *std.build.Builder) !void {
 
                 if (embed_resources) {
                     // files are in zig-cache/../assets
-                    try writer.print("    .@\"/{}.{}\" = @embedFile(\"../{}.{}\"),\n", .{
+                    try writer.print("    .@\"/{}.{}\" = @alignCast(64, @embedFile(\"../{}.{}\")),\n", .{
                         file_without_ext, extension.?,
                         file_without_ext, extension.?,
                     });
@@ -388,7 +388,7 @@ pub fn build(b: *std.build.Builder) !void {
         if (audio_config.wasapi) {
             // this is required for soundio
             client.linkSystemLibrary("uuid");
-            client.linkSystemLibrary("ole32"); 
+            client.linkSystemLibrary("ole32");
         }
 
         client.install();

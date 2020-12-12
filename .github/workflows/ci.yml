@@ -35,9 +35,10 @@ jobs:
         with:
           apt-get: libpulse-dev libasound2-dev
 
-      # This is only required for OpenGL builds on linux systems
+      # This is only required for OpenGL and Vulkan builds on linux systems
+      # TODO: Remove for vulkan when https://github.com/Aransentin/ZWL/issues/10 is implemented
       - name: Install OpenGL
-        if: ${{ matrix.platform == 'ubuntu-latest' && matrix.renderer == 'opengl' }}
+        if: ${{ matrix.platform == 'ubuntu-latest' && (matrix.renderer == 'opengl' || matrix.renderer == 'vulkan') }}
         uses: mstksg/get-package@v1
         with:
           apt-get: mesa-common-dev libgl1-mesa-dev

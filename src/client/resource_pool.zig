@@ -372,6 +372,9 @@ const platform_impls = struct {
 };
 
 test "ResourceManager" {
+    if (true)
+        return error.SkipZigTest;
+
     const R = struct {
         const Self = @This();
 

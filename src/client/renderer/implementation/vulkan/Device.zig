@@ -292,6 +292,12 @@ const DeviceDispatch = struct {
     vkDestroyFence: vk.PfnDestroyFence,
     vkWaitForFences: vk.PfnWaitForFences,
     vkResetFences: vk.PfnResetFences,
+    vkCreateRenderPass: vk.PfnCreateRenderPass,
+    vkDestroyRenderPass: vk.PfnDestroyRenderPass,
+    vkCreateFramebuffer: vk.PfnCreateFramebuffer,
+    vkDestroyFramebuffer: vk.PfnDestroyFramebuffer,
+    vkCreatePipelineLayout: vk.PfnCreatePipelineLayout,
+    vkDestroyPipelineLayout: vk.PfnDestroyPipelineLayout,
 
     usingnamespace vk.DeviceWrapper(@This());
 };

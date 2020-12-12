@@ -9,10 +9,12 @@ const Resources = @import("Resources.zig");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
 const Swapchain = @import("Swapchain.zig");
-const UiPipeline = @import("UiPipeline.zig");
+
+const PostProcessPipeline = @import("PostProcessPipeline.zig");
 
 const asManyPtr = @import("util.zig").asManyPtr;
 const Allocator = std.mem.Allocator;
+
 pub const log = std.log.scoped(.vulkan);
 
 const Self = @This();
@@ -41,13 +43,15 @@ const device_extensions = [_][*:0]const u8{
     vk.extension_info.khr_swapchain.name,
 };
 
+allocator: *Allocator,
 libvulkan: std.DynLib,
 instance: Instance,
 device: Device,
 surface: vk.SurfaceKHR,
 swapchain: Swapchain,
-frames: [frame_overlap]Frame,
 frame_nr: usize,
+frames: [frame_overlap]Frame,
+post_process_pipeline: PostProcessPipeline,
 
 pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
     log.info("Initializing Vulkan rendering backend", .{});
@@ -104,15 +108,22 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
         n_successfully_created = i;
     }
 
-    return Self{
+    var self = Self{
+        .allocator = allocator,
         .libvulkan = libvulkan,
         .instance = instance,
         .device = device,
         .surface = surface,
         .swapchain = swapchain,
-        .frames = frames,
         .frame_nr = 0,
+        .frames = frames,
+        .post_process_pipeline = undefined,
     };
+
+    try PostProcessPipeline.init(&self);
+    errdefer PostProcessPipeline.deinit(&self);
+
+    return self;
 }
 
 pub fn deinit(self: *Self) void {
@@ -123,6 +134,8 @@ pub fn deinit(self: *Self) void {
         log.crit("Received critical error {} during deinitialization", .{ @errorName(err) });
         return;
     };
+
+    PostProcessPipeline.deinit(self);
 
     for (self.frames) |*frame| frame.deinit(&self.device);
     self.swapchain.deinit(&self.device);

@@ -143,7 +143,7 @@ pub fn playSound(self: *Self, sound: Sound, options: PlaybackOptions) !void {
         .left_vol = pleft * options.volume,
         .right_vol = pright * options.volume,
         .start_time = if (options.start_time) |start_time|
-            @panic("TODO: Implement start time calculation")
+            current_time + @floatToInt(usize, @intToFloat(f32, self.outstream.sample_rate) * start_time + 0.5)
         else
             current_time,
         .count = 0,

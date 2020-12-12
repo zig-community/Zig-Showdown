@@ -141,6 +141,12 @@ pub fn update(self: *Self, input: Input, total_time: f32, delta_time: f32) !void
                 try self.resources.sounds.get(self.pling_sound, Resources.usage.menu_render),
                 .{},
             );
+            try Game.fromComponent(self).audio.playSound(
+                try self.resources.sounds.get(self.pling_sound, Resources.usage.menu_render),
+                .{
+                    .start_time = 0.5,
+                },
+            );
         }
     }
 }

@@ -24,9 +24,7 @@ pub const ModelPool = res.ResourcePool(Model, *Renderer, Model.loadFromMemory, M
 pub const SoundPool = res.ResourcePool(Sound, *Audio, Sound.loadSoundFromMemory, Sound.freeSound);
 
 const ResourceRoot = if (res.uses_embedded_data)
-    struct {
-        fn close(_: @This()) void {}
-    }
+    void
 else
     std.fs.Dir;
 
@@ -48,9 +46,7 @@ pub fn init(allocator: *std.mem.Allocator, renderer: *Renderer, audio: *Audio) !
     root.len += assets_folder.len;
     root[root.len - assets_folder.len ..][0..assets_folder.len].* = assets_folder.*;
 
-    var dir = if (res.uses_embedded_data)
-        ResourceRoot{}
-    else
+    var dir = if (res.uses_embedded_data) {} else
         try std.fs.cwd().openDir(root, .{});
     errdefer dir.close();
 
@@ -68,6 +64,7 @@ pub fn deinit(self: *Self) void {
     self.models.deinit();
     self.fonts.deinit();
     self.sounds.deinit();
-    self.root_directory.close();
+    if (!res.uses_embedded_data)
+        self.root_directory.close();
     self.* = undefined;
 }

@@ -142,6 +142,16 @@ pub fn ResourcePool(
         pub fn getName(self: *Self, resource_path: []const u8) !ResourceName {
             std.debug.assert(std.fs.path.isAbsolutePosix(resource_path));
 
+            const exists = inline for (std.meta.fields(@TypeOf(resource_data.files))) |fld| {
+                if (std.mem.eql(u8, fld.name, resource_path))
+                    break true;
+            } else false;
+
+            // This will check against our prebuilt list of resource files
+            if (!exists) {
+                return error.ResourceNotFound;
+            }
+
             const gopr = try self.resource_names.getOrPut(self.allocator, resource_path);
             if (!gopr.found_existing) {
                 // next statement is going to replace the user-passed path
@@ -201,7 +211,6 @@ pub fn ResourcePool(
                         break kv.key;
                 } else @panic("get received an invalid name from the programmer. This is a bug!");
 
-                // TODO: Change directory handle to the path of the exe, not the CWD
                 var file_map = MappingOfFile.init(self.allocator, self.root_directory, file_name) catch |err| switch (err) {
                     error.FileNotFound => {
                         log.emerg("Could not find resource file '{}'", .{file_name});
@@ -268,7 +277,7 @@ const platform_impls = struct {
 
         data: View,
 
-        pub fn init(allocator: *std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !Self {
+        pub fn init(allocator: *std.mem.Allocator, dir: void, path: []const u8) !Self {
             inline for (std.meta.fields(@TypeOf(resource_data.files))) |fld| {
                 if (std.mem.eql(u8, fld.name, path))
                     return Self{ .data = @field(resource_data.files, fld.name) };

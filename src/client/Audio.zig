@@ -2,9 +2,10 @@ const std = @import("std");
 const log = std.log.scoped(.audio);
 
 const soundio = @import("soundio");
-const resource_pool = @import("resource_pool.zig");
 
 const Self = @This();
+
+pub const Sound = @import("resources/Sound.zig");
 
 allocator: *std.mem.Allocator,
 interface: *soundio.SoundIo,
@@ -128,20 +129,6 @@ pub const PlaybackOptions = struct {
     // /// Play the sound for `count` times. If `count` is `null`, it will be
     // /// repeated endlessly
     // count: ?usize = 1,
-};
-
-pub const Sound = struct {
-    samples: []const f32,
-
-    pub fn loadSoundFromMemory(audio: *Self, allocator: *std.mem.Allocator, raw_data: resource_pool.BufferView, hint: []const u8) resource_pool.Error!Sound {
-        // TODO: resample audio files to the sample rate of audio.outbuffer.sample_rate
-        return Sound{
-            .samples = std.mem.bytesAsSlice(f32, raw_data),
-        };
-    }
-    pub fn freeSound(audio: *Self, allocator: *std.mem.Allocator, self: *Sound) void {
-        // nop
-    }
 };
 
 pub fn playSound(self: *Self, sound: Sound, options: PlaybackOptions) !void {

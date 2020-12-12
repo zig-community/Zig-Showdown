@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const log = std.log.scoped(.resources);
+
 //! This implements a resource management system that has a garbage collection
 //! model and can be used for easy loading/unloading of resources.
 //!
@@ -47,6 +49,9 @@ pub const Mask = u64;
 
 pub const BufferView = MappingOfFile.View;
 
+/// When `true`, does not require a directory handle.
+pub const uses_embedded_data = resource_data.embedded;
+
 /// A resource manager for a given type.
 /// Resources are obtained via a resource name (string identifier)
 /// and will be alive until no one referenced them anymore.
@@ -89,6 +94,8 @@ pub fn ResourcePool(
             return a == b;
         }
 
+        const ResourceRoot = if (resource_data.embedded) void else std.fs.Dir;
+
         allocator: *std.mem.Allocator,
         context: Context,
 
@@ -104,11 +111,14 @@ pub fn ResourcePool(
 
         resources: ManagedResourceMap,
 
-        pub fn init(allocator: *std.mem.Allocator, context: Context) Self {
+        root_directory: ResourceRoot,
+
+        /// `allocator` and `root_directory` must valid until a call to deinit()
+        pub fn init(allocator: *std.mem.Allocator, root_directory: ResourceRoot, context: Context) Self {
             return Self{
                 .allocator = allocator,
                 .context = context,
-
+                .root_directory = root_directory,
                 .string_arena = std.heap.ArenaAllocator.init(allocator),
                 .resource_names = std.StringHashMapUnmanaged(ResourceName){},
                 .resources = ManagedResourceMap{},
@@ -192,7 +202,13 @@ pub fn ResourcePool(
                 } else @panic("get received an invalid name from the programmer. This is a bug!");
 
                 // TODO: Change directory handle to the path of the exe, not the CWD
-                var file_map = try MappingOfFile.init(self.allocator, std.fs.cwd(), file_name);
+                var file_map = MappingOfFile.init(self.allocator, self.root_directory, file_name) catch |err| switch (err) {
+                    error.FileNotFound => {
+                        log.emerg("Could not find resource file '{}'", .{file_name});
+                        return error.FileNotFound;
+                    },
+                    else => |e| return e,
+                };
                 errdefer file_map.deinit();
 
                 gopr.entry.value = ManagedResource{
@@ -364,7 +380,7 @@ test "ResourceManager" {
     };
 
     {
-        var manager = ResourcePool(R, void, R.load, R.deinit).init(std.testing.allocator, {});
+        var manager = ResourcePool(R, void, R.load, R.deinit).init(std.testing.allocator, std.fs.cwd(), {});
         defer manager.deinit();
 
         var n0_1 = try manager.getName("/foo/bar/bam");

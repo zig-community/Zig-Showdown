@@ -77,15 +77,15 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .resources = resources,
         .allocator = allocator,
 
-        .items_font_id = try resources.fonts.getName("/assets/font.tex"),
+        .items_font_id = try resources.fonts.getName("/font.tex"),
         .background_ids = [3]Resources.TexturePool.ResourceName{
-            try resources.textures.getName("/assets/backgrounds/matte-01.tex"),
-            try resources.textures.getName("/assets/backgrounds/matte-02.tex"),
-            try resources.textures.getName("/assets/backgrounds/matte-03.tex"),
+            try resources.textures.getName("/backgrounds/matte-01.tex"),
+            try resources.textures.getName("/backgrounds/matte-02.tex"),
+            try resources.textures.getName("/backgrounds/matte-03.tex"),
         },
-        .logo_id = try resources.textures.getName("/assets/logo.tex"),
+        .logo_id = try resources.textures.getName("/logo.tex"),
 
-        .pling_sound = try resources.sounds.getName("/assets/sounds/something.raw"),
+        .pling_sound = try resources.sounds.getName("/sounds/ui/click.snd"),
     };
 }
 

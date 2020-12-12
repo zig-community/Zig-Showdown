@@ -230,9 +230,16 @@ pub fn build(b: *std.build.Builder) !void {
         tex_conv.setBuildMode(tool_mode);
         tex_conv.linkLibC();
 
+        const snd_conv = b.addExecutable("snd-conv", "src/tools/snd-conv.zig");
+        snd_conv.addPackage(pkgs.args);
+        snd_conv.setTarget(native_target);
+        snd_conv.setBuildMode(tool_mode);
+        snd_conv.linkLibC();
+
         const tools_step = b.step("tools", "Compiles all tools required in the build process");
         tools_step.dependOn(&obj_conv.step);
         tools_step.dependOn(&tex_conv.step);
+        tools_step.dependOn(&snd_conv.step);
 
         const assets_step = b.step("assets", "Compiles all assets to their final format");
 
@@ -253,7 +260,7 @@ pub fn build(b: *std.build.Builder) !void {
             var walker = try std.fs.walkPath(b.allocator, assets_src_folder);
             defer walker.deinit();
 
-            try std.fs.cwd().makePath("zig-cache");
+            try std.fs.cwd().makePath("zig-cache/bin");
 
             while (try walker.next()) |entry| {
                 var extension: []const u8 = undefined;
@@ -265,6 +272,9 @@ pub fn build(b: *std.build.Builder) !void {
                 } else if (std.mem.endsWith(u8, entry.path, ".png") or std.mem.endsWith(u8, entry.path, ".tga") or std.mem.endsWith(u8, entry.path, ".bmp")) {
                     convert_file = tex_conv.run();
                     extension = "tex";
+                } else if (std.mem.endsWith(u8, entry.path, ".wav")) {
+                    convert_file = snd_conv.run();
+                    extension = "snd";
                 } else {
                     continue;
                 }
@@ -281,8 +291,15 @@ pub fn build(b: *std.build.Builder) !void {
                 else
                     "";
 
+                const asset_name = try std.mem.concat(b.allocator, u8, &[_][]const u8{
+                    "/",
+                    file_without_ext[assets_src_folder.len + 1 ..],
+                    ".",
+                    extension,
+                });
+
                 const output_file = try std.mem.concat(b.allocator, u8, &[_][]const u8{
-                    "assets/",
+                    "zig-cache/bin/assets/",
                     file_without_ext[assets_src_folder.len + 1 ..],
                     ".",
                     extension,
@@ -292,16 +309,17 @@ pub fn build(b: *std.build.Builder) !void {
 
                 convert_file.addArg(entry.path);
                 convert_file.addArg(output_file);
+                convert_file.addArg(asset_name);
                 assets_step.dependOn(&convert_file.step);
 
                 if (embed_resources) {
                     // files are in zig-cache/../assets
-                    try writer.print("    .@\"/{}\" = @alignCast(64, @embedFile(\"../{}\")),\n", .{
-                        output_file,
+                    try writer.print("    .@\"{}\" = @alignCast(64, @embedFile(\"../{}\")),\n", .{
+                        asset_name,
                         output_file,
                     });
                 } else {
-                    try writer.print("    .@\"/{}\" = {{}},\n", .{output_file});
+                    try writer.print("    .@\"{}\" = {{}},\n", .{asset_name});
                 }
             }
 

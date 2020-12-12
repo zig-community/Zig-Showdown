@@ -47,8 +47,8 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources) !Self {
         .allocator = allocator,
         .resources = resources,
 
-        .level_model_id = try resources.models.getName("/assets/maps/demo.mdl"),
-        .healthpack_id = try resources.models.getName("/assets/models/healthpack.mdl"),
+        .level_model_id = try resources.models.getName("/maps/demo.mdl"),
+        .healthpack_id = try resources.models.getName("/models/healthpack.mdl"),
 
         .entities = undefined,
     };

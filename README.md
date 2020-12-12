@@ -10,9 +10,9 @@ The main communication happens via the [Zig Showtime](https://discord.gg/p4bUwnf
 ### Asset Building
 
 Assets are spread over 3 different folders:
-- `assets`: Contains the final assets that will be shipped with the game. This folder is completly auto-generated and the folder is not included in the repository.
-- `assets-in`: Intermediate asset files in commonly editable formats like png, obj. These files get compiled in the `zig build assets` step into a file into `assets`.
 - `assets-src`: Source formats for the files that are from the original editor. Files here are for example blender or gimp project files.
+- `assets-in`: Intermediate asset files in commonly editable formats like png, obj. These files get compiled in the `zig build assets` step into a file into `assets`.
+- `zig-cache/bin/assets`: Contains the final assets that will be shipped with the game. This folder is completly auto-generated and the folder is not included in the repository.
 
 When invoking `zig build assets`, the build system will search for files in `assets-in` and will translate them into the game-custom format which are stored in `assets`.
 
@@ -30,6 +30,14 @@ This table lists all implemented (or planned) asset file associations:
 | `*.obj`    | `.mdl`                | `Model`       |
 | `*.wav`    | `.snd`                | `Sound` (https://github.com/zig-community/Zig-Showdown/issues/9)  |
 | `*.ogg`    | `.mus`                | `Music` (https://github.com/zig-community/Zig-Showdown/issues/11) |
+
+
+#### Tools 
+
+Each tool receives three cli args:
+1. **Input path:** This is a path to the file that should be converted
+2. **Output path:** This is the target file where the final asset file should be written
+3. **Asset name:** This is the identifier (file path) which is used in the game can should be used to refer to other assets
 
 ### Contribution
 

@@ -19,7 +19,7 @@ font_id: Resources.FontPool.ResourceName,
 pub fn init(resources: *Resources) !Self {
     return Self{
         .resources = resources,
-        .font_id = try resources.fonts.getName("/assets/font.tex"),
+        .font_id = try resources.fonts.getName("/font.tex"),
     };
 }
 

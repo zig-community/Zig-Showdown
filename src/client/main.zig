@@ -123,7 +123,7 @@ pub fn main() anyerror!u8 {
     var renderer = try Renderer.init(global_allocator, window);
     defer renderer.deinit();
 
-    var resources = Resources.init(global_allocator, &renderer, audio);
+    var resources = try Resources.init(global_allocator, &renderer, audio);
     defer resources.deinit();
 
     // TODO: This is a ugly hack in the design and should be resolved

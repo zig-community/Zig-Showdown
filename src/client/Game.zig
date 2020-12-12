@@ -99,7 +99,7 @@ pub fn init(allocator: *std.mem.Allocator, resources: *Resources, audio: *Audio)
         .splash = try states.Splash.init(allocator, resources),
         .demo_pause = states.DemoPause.init(),
 
-        .font_id = try resources.fonts.getName("/assets/font.tex"),
+        .font_id = try resources.fonts.getName("/font.tex"),
     };
 
     game.gameplay = try states.Gameplay.init(allocator, resources);

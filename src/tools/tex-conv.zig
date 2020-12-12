@@ -1,4 +1,4 @@
-//! This tool converts Wavefront OBJ to the projects own model format
+//! This tool converts image files to the projects own texture format
 const std = @import("std");
 const args = @import("args");
 const zigimg = @import("zigimg");
@@ -14,7 +14,7 @@ pub fn main() !u8 {
     }, allocator);
     defer cli.deinit();
 
-    if (cli.positionals.len != 2)
+    if (cli.positionals.len < 2)
         return 1;
 
     var out_file = cli.positionals[1];

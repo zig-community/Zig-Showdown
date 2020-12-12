@@ -15,7 +15,7 @@ pub fn main() !u8 {
     }, allocator);
     defer cli.deinit();
 
-    if (cli.positionals.len != 2)
+    if (cli.positionals.len < 3)
         return 1;
 
     var out_file = cli.positionals[1];
@@ -198,8 +198,8 @@ pub fn main() !u8 {
 
         var buffer = [1]u8{0} ** 120;
 
-        _ = try std.fmt.bufPrint(&buffer, "/{}/{}.tex", .{
-            std.fs.path.dirname(cli.positionals[0]),
+        _ = try std.fmt.bufPrint(&buffer, "{}/{}.tex", .{
+            std.fs.path.dirname(cli.positionals[2]), // use the asset relative path
             texture[0 .. texture.len - 4],
         });
 

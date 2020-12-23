@@ -113,7 +113,7 @@ pub fn main() anyerror!u8 {
         .backend = switch (build_options.render_backend) {
             .software => .software,
             .opengl => zwl.Backend{ .opengl = .{ .major = 3, .minor = 3 } },
-            // TODO: Change to .vulkan when the ZWL Xlib backend does not depends on GL anymore.
+            // TODO: Change to .vulkan when the ZWL Xlib backend supports vulkan.
             .vulkan, .vulkan_rt => .none,
             else => @compileError("unsupported render backend!"),
         },

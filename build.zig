@@ -214,8 +214,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     const gen_vk = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig");
 
-    const asset_gen_step = try AssetStep.create(b, embed_resources);
-    {
+    const asset_gen_step = blk: {
         const obj_conv = b.addExecutable("obj-conv", "src/tools/obj-conv.zig");
         obj_conv.addPackage(pkgs.args);
         obj_conv.addPackage(pkgs.zlm);
@@ -241,56 +240,19 @@ pub fn build(b: *std.build.Builder) !void {
         tools_step.dependOn(&tex_conv.step);
         tools_step.dependOn(&snd_conv.step);
 
-        const assets_step = b.step("assets", "Compiles all assets to their final format");
+        const asset_gen_step = try AssetStep.create(b, embed_resources, .{
+            .obj_conv = obj_conv,
+            .tex_conv = tex_conv,
+            .snd_conv = snd_conv,
+        });
 
+        try asset_gen_step.addResources("assets-in");
+
+        const assets_step = b.step("assets", "Compiles all assets to their final format");
         assets_step.dependOn(&asset_gen_step.step);
 
-        const assets_src_folder = "assets-in";
-
-        var walker = try std.fs.walkPath(b.allocator, assets_src_folder);
-        defer walker.deinit();
-
-        while (try walker.next()) |entry| {
-            var new_ext: []const u8 = undefined;
-            var converter: *std.build.LibExeObjStep = undefined;
-
-            if (std.mem.endsWith(u8, entry.path, ".obj")) {
-                converter = obj_conv;
-                new_ext = "mdl";
-            } else if (std.mem.endsWith(u8, entry.path, ".png")
-                    or std.mem.endsWith(u8, entry.path, ".tga")
-                    or std.mem.endsWith(u8, entry.path, ".bmp")) {
-                converter = tex_conv;
-                new_ext = "tex";
-            } else if (std.mem.endsWith(u8, entry.path, ".wav")) {
-                converter = snd_conv;
-                new_ext = "snd";
-            } else {
-                continue;
-            }
-
-            const file_without_ext = if (entry.path.len > 4)
-                if (std.builtin.os.tag == .windows) blk: {
-                    const p = try b.allocator.dupe(u8, entry.path[0 .. entry.path.len - 4]);
-                    for (p) |*c| {
-                        if (c.* == '\\')
-                            c.* = '/';
-                    }
-                    break :blk p;
-                } else entry.path[0 .. entry.path.len - 4]
-            else
-                "";
-
-            const asset_name = try std.mem.concat(b.allocator, u8, &[_][]const u8{
-                "/",
-                file_without_ext[assets_src_folder.len + 1 ..],
-                ".",
-                new_ext,
-            });
-
-            try asset_gen_step.addResource(converter, entry.path, asset_name);
-        }
-    }
+        break :blk asset_gen_step;
+    };
 
     const libsoundio = blk: {
         const root = "./deps/libsoundio";

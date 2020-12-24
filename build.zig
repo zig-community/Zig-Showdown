@@ -1,5 +1,6 @@
 const std = @import("std");
 const vkgen = @import("deps/vulkan-zig/generator/index.zig");
+const AssetStep = @import("src/build/AssetStep.zig");
 
 const pkgs = struct {
     const network = std.build.Pkg{
@@ -55,11 +56,6 @@ const pkgs = struct {
         .path = "./deps/zigimg/zigimg.zig",
     };
 
-    const resources = std.build.Pkg{
-        .name = "showdown-resources",
-        .path = "./zig-cache/resources.zig", // Written by this file
-    };
-
     const soundio = std.build.Pkg{
         .name = "soundio",
         .path = "./deps/soundio.zig/soundio.zig",
@@ -106,13 +102,19 @@ const AudioConfig = struct {
     wasapi: bool,
 };
 
-fn addClientPackages(exe: *std.build.LibExeObjStep, target: std.zig.CrossTarget, render_backend: RenderBackend, gen_vk: *vkgen.VkGenerateStep) void {
+fn addClientPackages(
+    exe: *std.build.LibExeObjStep,
+    target: std.zig.CrossTarget,
+    render_backend: RenderBackend,
+    gen_vk: *vkgen.VkGenerateStep,
+    resources: std.build.Pkg,
+) void {
     exe.addPackage(pkgs.network);
     exe.addPackage(pkgs.args);
     exe.addPackage(pkgs.zwl);
     exe.addPackage(pkgs.zlm);
     exe.addPackage(pkgs.zzz);
-    exe.addPackage(pkgs.resources);
+    exe.addPackage(resources);
     exe.addPackage(pkgs.soundio);
 
     switch (render_backend) {
@@ -212,6 +214,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     const gen_vk = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig");
 
+    const asset_gen_step = try AssetStep.create(b, embed_resources);
     {
         const obj_conv = b.addExecutable("obj-conv", "src/tools/obj-conv.zig");
         obj_conv.addPackage(pkgs.args);
@@ -240,90 +243,53 @@ pub fn build(b: *std.build.Builder) !void {
 
         const assets_step = b.step("assets", "Compiles all assets to their final format");
 
-        // precompile all asset files:
+        assets_step.dependOn(&asset_gen_step.step);
 
-        var resources_list = std.ArrayList(u8).init(b.allocator);
-        {
-            var writer = resources_list.writer();
+        const assets_src_folder = "assets-in";
 
-            try writer.writeAll("// This is auto-generated code\n\n");
+        var walker = try std.fs.walkPath(b.allocator, assets_src_folder);
+        defer walker.deinit();
 
-            try writer.print("pub const embedded = {};\n\n", .{embed_resources});
+        while (try walker.next()) |entry| {
+            var new_ext: []const u8 = undefined;
+            var converter: *std.build.LibExeObjStep = undefined;
 
-            try writer.writeAll("pub const files = .{\n");
-
-            const assets_src_folder = "assets-in";
-
-            var walker = try std.fs.walkPath(b.allocator, assets_src_folder);
-            defer walker.deinit();
-
-            try std.fs.cwd().makePath("zig-cache/bin");
-
-            while (try walker.next()) |entry| {
-                var extension: []const u8 = undefined;
-                var convert_file: *std.build.RunStep = undefined;
-
-                if (std.mem.endsWith(u8, entry.path, ".obj")) {
-                    convert_file = obj_conv.run();
-                    extension = "mdl";
-                } else if (std.mem.endsWith(u8, entry.path, ".png") or std.mem.endsWith(u8, entry.path, ".tga") or std.mem.endsWith(u8, entry.path, ".bmp")) {
-                    convert_file = tex_conv.run();
-                    extension = "tex";
-                } else if (std.mem.endsWith(u8, entry.path, ".wav")) {
-                    convert_file = snd_conv.run();
-                    extension = "snd";
-                } else {
-                    continue;
-                }
-
-                const file_without_ext = if (entry.path.len > 4)
-                    if (std.builtin.os.tag == .windows) blk: {
-                        const p = try b.allocator.dupe(u8, entry.path[0 .. entry.path.len - 4]);
-                        for (p) |*c| {
-                            if (c.* == '\\')
-                                c.* = '/';
-                        }
-                        break :blk p;
-                    } else entry.path[0 .. entry.path.len - 4]
-                else
-                    "";
-
-                const asset_name = try std.mem.concat(b.allocator, u8, &[_][]const u8{
-                    "/",
-                    file_without_ext[assets_src_folder.len + 1 ..],
-                    ".",
-                    extension,
-                });
-
-                const output_file = try std.mem.concat(b.allocator, u8, &[_][]const u8{
-                    "zig-cache/bin/assets/",
-                    file_without_ext[assets_src_folder.len + 1 ..],
-                    ".",
-                    extension,
-                });
-
-                try std.fs.cwd().makePath(std.fs.path.dirname(output_file) orelse unreachable);
-
-                convert_file.addArg(entry.path);
-                convert_file.addArg(output_file);
-                convert_file.addArg(asset_name);
-                assets_step.dependOn(&convert_file.step);
-
-                if (embed_resources) {
-                    // files are in zig-cache/../assets
-                    try writer.print("    .@\"{}\" = @alignCast(64, @embedFile(\"../{}\")),\n", .{
-                        asset_name,
-                        output_file,
-                    });
-                } else {
-                    try writer.print("    .@\"{}\" = {{}},\n", .{asset_name});
-                }
+            if (std.mem.endsWith(u8, entry.path, ".obj")) {
+                converter = obj_conv;
+                new_ext = "mdl";
+            } else if (std.mem.endsWith(u8, entry.path, ".png")
+                    or std.mem.endsWith(u8, entry.path, ".tga")
+                    or std.mem.endsWith(u8, entry.path, ".bmp")) {
+                converter = tex_conv;
+                new_ext = "tex";
+            } else if (std.mem.endsWith(u8, entry.path, ".wav")) {
+                converter = snd_conv;
+                new_ext = "snd";
+            } else {
+                continue;
             }
 
-            try writer.writeAll("};\n");
-        }
+            const file_without_ext = if (entry.path.len > 4)
+                if (std.builtin.os.tag == .windows) blk: {
+                    const p = try b.allocator.dupe(u8, entry.path[0 .. entry.path.len - 4]);
+                    for (p) |*c| {
+                        if (c.* == '\\')
+                            c.* = '/';
+                    }
+                    break :blk p;
+                } else entry.path[0 .. entry.path.len - 4]
+            else
+                "";
 
-        try std.fs.cwd().writeFile("zig-cache/resources.zig", resources_list.items);
+            const asset_name = try std.mem.concat(b.allocator, u8, &[_][]const u8{
+                "/",
+                file_without_ext[assets_src_folder.len + 1 ..],
+                ".",
+                new_ext,
+            });
+
+            try asset_gen_step.addResource(converter, entry.path, asset_name);
+        }
     }
 
     const libsoundio = blk: {
@@ -397,7 +363,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
-        addClientPackages(client, target, render_backend, gen_vk);
+        addClientPackages(client, target, render_backend, gen_vk, asset_gen_step.package);
 
         client.addBuildOption(State, "initial_state", initial_state);
         client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
@@ -463,7 +429,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const test_client = b.addTest("src/client/main.zig");
-        addClientPackages(test_client, target, render_backend, gen_vk);
+        addClientPackages(test_client, target, render_backend, gen_vk, asset_gen_step.package);
 
         test_client.addBuildOption(State, "initial_state", initial_state);
         test_client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);

@@ -101,7 +101,7 @@ pub fn addResources(self: *Self, root: []const u8) !void {
         try std.fs.cwd().makePath(std.fs.path.dirname(output).?);
 
         const name_without_ext = if (std.builtin.os.tag == .windows) blk: {
-                const new_path = try self.builder.allocator.dupe(u8, path);
+                const new_path = try self.builder.allocator.dupe(u8, relative_without_ext);
                 for (new_path) |*c| {
                     if (c.* == path.sep_windows)
                         c.* = path.sep_posix;

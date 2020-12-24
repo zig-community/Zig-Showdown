@@ -89,9 +89,6 @@ const RenderBackend = enum {
 
     /// basic rendering backend for mobile devices and embedded stuff like Raspberry PI
     opengl_es,
-
-    /// raytracing backend planned by Snektron
-    vulkan_rt,
 };
 
 const AudioConfig = struct {
@@ -118,7 +115,7 @@ fn addClientPackages(
     exe.addPackage(pkgs.soundio);
 
     switch (render_backend) {
-        .vulkan, .vulkan_rt => {
+        .vulkan => {
             exe.step.dependOn(&gen_vk.step);
             exe.addPackage(gen_vk.package);
             exe.linkLibC();
@@ -126,7 +123,7 @@ fn addClientPackages(
             if (target.isLinux()) {
                 exe.linkSystemLibrary("X11");
             } else {
-                @panic("vulkan/vulkan_rt not yet implemented yet for this target");
+                @panic("vulkan not yet implemented yet for this target");
             }
         },
         .software => {

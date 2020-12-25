@@ -92,6 +92,16 @@ const RenderBackend = enum {
     opengl_es,
 };
 
+const RenderBackendSteps = union(RenderBackend) {
+    software,
+    vulkan: struct {
+        gen_bindings: *vkgen.VkGenerateStep,
+        gen_shaders: *VulkanShaderStep,
+    },
+    opengl,
+    opengl_es,
+};
+
 const AudioConfig = struct {
     jack: bool = false,
     pulseaudio: bool,
@@ -103,10 +113,8 @@ const AudioConfig = struct {
 fn addClientPackages(
     exe: *std.build.LibExeObjStep,
     target: std.zig.CrossTarget,
-    render_backend: RenderBackend,
-    gen_vk: *vkgen.VkGenerateStep,
-    gen_shaders: *VulkanShaderStep,
     resources: std.build.Pkg,
+    render_backend_steps: RenderBackendSteps,
 ) void {
     exe.addPackage(pkgs.network);
     exe.addPackage(pkgs.args);
@@ -116,10 +124,14 @@ fn addClientPackages(
     exe.addPackage(resources);
     exe.addPackage(pkgs.soundio);
 
-    switch (render_backend) {
-        .vulkan => {
-            exe.step.dependOn(&gen_vk.step);
-            exe.addPackage(gen_vk.package);
+    switch (render_backend_steps) {
+        .software => {
+            exe.addPackage(pkgs.pixel_draw);
+            exe.addPackage(pkgs.painterz);
+        },
+        .vulkan => |steps| {
+            exe.step.dependOn(&steps.gen_bindings.step);
+            exe.addPackage(steps.gen_bindings.package);
             exe.linkLibC();
 
             if (target.isLinux()) {
@@ -128,16 +140,8 @@ fn addClientPackages(
                 @panic("vulkan not yet implemented yet for this target");
             }
 
-            exe.step.dependOn(&gen_shaders.step);
-            exe.addPackage(gen_shaders.package);
-        },
-        .software => {
-            exe.addPackage(pkgs.pixel_draw);
-            exe.addPackage(pkgs.painterz);
-        },
-        .opengl_es => {
-            // TODO
-            @panic("opengl_es is not implementated yet");
+            exe.step.dependOn(&steps.gen_shaders.step);
+            exe.addPackage(steps.gen_shaders.package);
         },
         .opengl => {
             exe.addPackage(pkgs.gl);
@@ -148,6 +152,10 @@ fn addClientPackages(
                 exe.linkSystemLibrary("X11");
                 exe.linkSystemLibrary("GL");
             }
+        },
+        .opengl_es => {
+            // TODO
+            @panic("opengl_es is not implementated yet");
         },
     }
 }
@@ -216,8 +224,17 @@ pub fn build(b: *std.build.Builder) !void {
 
     const test_step = b.step("test", "Runs the test suite for all source filess");
 
-    const gen_vk = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig");
-    const gen_shaders = try VulkanShaderStep.create(b, "glslc");
+    const render_backend_steps: RenderBackendSteps = switch (render_backend) {
+        .software => .software,
+        .opengl => .opengl,
+        .opengl_es => .opengl_es,
+        .vulkan => .{
+            .vulkan = .{
+                .gen_bindings = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig"),
+                .gen_shaders = try VulkanShaderStep.create(b, "glslc"),
+            }
+        },
+    };
 
     const asset_gen_step = blk: {
         const obj_conv = b.addExecutable("obj-conv", "src/tools/obj-conv.zig");
@@ -330,7 +347,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
-        addClientPackages(client, target, render_backend, gen_vk, gen_shaders, asset_gen_step.package);
+        addClientPackages(client, target, asset_gen_step.package, render_backend_steps);
 
         client.addBuildOption(State, "initial_state", initial_state);
         client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
@@ -396,7 +413,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const test_client = b.addTest("src/client/main.zig");
-        addClientPackages(test_client, target, render_backend, gen_vk, gen_shaders, asset_gen_step.package);
+        addClientPackages(test_client, target, asset_gen_step.package, render_backend_steps);
 
         test_client.addBuildOption(State, "initial_state", initial_state);
         test_client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);

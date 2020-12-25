@@ -207,7 +207,7 @@ pub fn build(b: *std.build.Builder) !void {
         []const u8,
         "glsl-path",
         "Override the glslc path (Only used when -Drenderer=vulkan)"
-    } orelse "glslc",
+    ) orelse "glslc";
 
     const tool_mode: std.builtin.Mode = if (debug_tools)
         .Debug
@@ -232,11 +232,17 @@ pub fn build(b: *std.build.Builder) !void {
         .software => .software,
         .opengl => .opengl,
         .opengl_es => .opengl_es,
-        .vulkan => .{
-            .vulkan = .{
-                .gen_bindings = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig"),
-                .gen_shaders = try VulkanShaderStep.create(b, glslc),
-            }
+        .vulkan => blk: {
+            const gen_shaders = try VulkanShaderStep.create(b, glslc_path);
+            try gen_shaders.addShader("post_process_frag", "src/client/renderer/implementation/vulkan/shaders/post_process.frag");
+            try gen_shaders.addShader("post_process_vert", "src/client/renderer/implementation/vulkan/shaders/post_process.vert");
+
+            break :blk .{
+                .vulkan = .{
+                    .gen_bindings = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig"),
+                    .gen_shaders = gen_shaders,
+                }
+            };
         },
     };
 

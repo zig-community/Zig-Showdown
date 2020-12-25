@@ -162,7 +162,7 @@ pub fn acquireNextImage(self: *Self, device: *const Device, image_acquired: vk.S
         .success => PresentState.optimal,
         .suboptimal_khr => PresentState.suboptimal,
         .not_ready => unreachable, // Only reachable if timeout is zero
-        .timeout => return error.Hang,
+        .timeout => return error.Timeout,
         else => unreachable,
     };
 }

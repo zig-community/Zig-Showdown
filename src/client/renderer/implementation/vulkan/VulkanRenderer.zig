@@ -129,10 +129,13 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
 pub fn deinit(self: *Self) void {
     log.debug("Rendered {} frames", .{ self.frame_nr });
 
-    self.waitForAllFrames() catch |err| {
-        // These errors are unrecoverable anyway
-        log.crit("Received critical error {} during deinitialization", .{ @errorName(err) });
-        return;
+    self.waitForAllFrames() catch |err| switch (err) {
+        error.Timeout => log.warn("Recieved timeout during deinitialization, was endFrame called?", .{}),
+        else => {
+            // These errors are unrecoverable anyway
+            log.crit("Received critical error '{}' during deinitialization", .{ @errorName(err) });
+            return;
+        }
     };
 
     PostProcessPipeline.deinit(self);
@@ -253,7 +256,7 @@ const Frame = struct {
         const fence = asManyPtr(&self.frame_fence);
         const result = try device.vkd.waitForFences(device.handle, 1, fence, vk.TRUE, frame_timeout);
         if (result == .timeout) {
-            return error.Hang;
+            return error.Timeout;
         }
 
         try device.vkd.resetFences(device.handle, 1, fence);

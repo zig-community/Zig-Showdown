@@ -20,9 +20,11 @@ pub fn create(builder: *Builder, glslc_path: []const u8) !*Self {
         "shaders.zig",
     });
 
+    const glslc_cmd = try builder.allocator.dupe([]const u8, &[_][]const u8{ glslc_path, "--target-env=vulkan1.0", "-Werror" });
+
     self.* = .{
         .step = Step.init(.Custom, "vulkan-shaders", builder.allocator, make),
-        .shader_step = vkgen.ShaderCompileStep.init(builder, &[_][]const u8{ glslc_path, "--target-env=vulkan1.2" }),
+        .shader_step = vkgen.ShaderCompileStep.init(builder, glslc_cmd),
         .builder = builder,
         .package = .{
             .name = "showdown-vulkan-shaders",
@@ -36,11 +38,11 @@ pub fn create(builder: *Builder, glslc_path: []const u8) !*Self {
     return self;
 }
 
-pub fn addShader(self: *Self, name: []const u8, source: []const u8) void {
+pub fn addShader(self: *Self, name: []const u8, source: []const u8) !void {
     const shader_out_path = self.shader_step.add(source);
     var writer = self.shaders.writer();
     const pr = PathRenderer{.path = shader_out_path};
-    writer.print(
+    try writer.print(
         \\pub const {} = @alignCast(64, @embedFile("{}"));
         \\
         , .{ name, pr }

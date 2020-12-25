@@ -8,9 +8,13 @@ const VulkanRenderer = @import("VulkanRenderer.zig");
 
 const asManyPtr = @import("util.zig").asManyPtr;
 
+//! To keep everything nice in the rest of the implementation, the 'screen' framebuffer
+//! actually refers to an internal regular framebuffer, backed by an image. In the final
+//! pass (this pass), this framebuffer is then copied to the swapchain image, and post-
+//! processing is applied simultaneously.
 //! The PostProcessPipeline always renders to the final swap image.
-//! To do that, this pipeline needs its own render pass, as this render pass
-//! needs to output an image in present_src_khr, and doesn't require a depth
+//! To do that, this pipeline needs its own render pass and Vulkan framebuffers, as this
+//! render pass needs to output an image in present_src_khr, and doesn't require a depth
 //! buffer either.
 
 pub const Self = @This();
@@ -24,24 +28,24 @@ framebuffers: []vk.Framebuffer,
 pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 
-pub fn init(r: *VulkanRenderer) !void {
-    const self = &r.post_process_pipeline;
-    self.* = .{
+pub fn init(r: *VulkanRenderer) !Self {
+    var self = Self{
         .render_pass = .null_handle,
         .framebuffers = try r.allocator.alloc(vk.Framebuffer, 0),
         .pipeline_layout = .null_handle,
         .pipeline = .null_handle,
     };
-    errdefer deinit(r);
+    errdefer self.deinit(r);
 
     try self.initRenderPass(r);
     try self.initFramebuffers(r);
     try self.initPipelineLayout(r);
     try self.initPipeline(r);
+
+    return self;
 }
 
-pub fn deinit(r: *VulkanRenderer) void {
-    const self = &r.post_process_pipeline;
+pub fn deinit(self: Self, r: *const VulkanRenderer) void {
     r.device.vkd.destroyPipeline(r.device.handle, self.pipeline, null);
     r.device.vkd.destroyPipelineLayout(r.device.handle, self.pipeline_layout, null);
 
@@ -53,12 +57,28 @@ pub fn deinit(r: *VulkanRenderer) void {
     r.device.vkd.destroyRenderPass(r.device.handle, self.render_pass, null);
 }
 
+pub fn draw(self: *Self, r: *VulkanRenderer, cmd_buf: vk.CommandBuffer) !void {
+    r.device.vkd.cmdBeginRenderPass(cmd_buf, .{
+        .render_pass = self.render_pass,
+        .framebuffer = self.framebuffers[r.swapchain.image_index],
+        .render_area = .{
+            .offset = .{.x = 0, .y = 0},
+            .extent = r.swapchain.extent,
+        },
+        .clear_value_count = 0,
+        .p_clear_values = undefined,
+    }, .@"inline");
+    r.device.vkd.cmdBindPipeline(cmd_buf, .graphics, self.pipeline);
+    r.device.vkd.cmdDraw(cmd_buf, 3, 1, 0, 0);
+    r.device.vkd.cmdEndRenderPass(cmd_buf);
+}
+
 fn initRenderPass(self: *Self, r: *VulkanRenderer) !void {
     const color_attachment = vk.AttachmentDescription{
         .flags = .{},
         .format = r.swapchain.surface_format.format,
         .samples = .{.@"1_bit" = true},
-        .load_op = .clear,
+        .load_op = .dont_care, // Fullscreen quad overwrites everything
         .store_op = .store,
         .stencil_load_op = .dont_care,
         .stencil_store_op = .dont_care,
@@ -96,7 +116,7 @@ fn initRenderPass(self: *Self, r: *VulkanRenderer) !void {
 }
 
 fn initFramebuffers(self: *Self, r: *VulkanRenderer) !void {
-    // TODO: Delete currently existing framebuffers (if any)
+    // TODO: Delete currently existing framebuffers (if any) when resizing
     self.framebuffers = try r.allocator.alloc(vk.Framebuffer, r.swapchain.images.len);
     std.mem.set(vk.Framebuffer, self.framebuffers, .null_handle);
 
@@ -204,7 +224,7 @@ fn initPipeline(self: *Self, r: *VulkanRenderer) !void {
         .polygon_mode = .fill,
         // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
         .cull_mode = .{.front_bit = true},
-        .front_face = .clockwise,
+        .front_face = .counter_clockwise,
 
         .depth_bias_enable = vk.FALSE,
         .depth_bias_constant_factor = 0,

@@ -120,8 +120,8 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
         .post_process_pipeline = undefined,
     };
 
-    try PostProcessPipeline.init(&self);
-    errdefer PostProcessPipeline.deinit(&self);
+    self.post_process_pipeline = try PostProcessPipeline.init(&self);
+    errdefer self.post_process_pipeline.deinit(&self);
 
     return self;
 }
@@ -138,7 +138,7 @@ pub fn deinit(self: *Self) void {
         }
     };
 
-    PostProcessPipeline.deinit(self);
+    self.post_process_pipeline.deinit(self);
 
     for (self.frames) |*frame| frame.deinit(&self.device);
     self.swapchain.deinit(&self.device);
@@ -162,17 +162,29 @@ pub fn beginFrame(self: *Self) !void {
     if (present_state == .suboptimal) {
         log.alert("Swapchain suboptimal or out of date\n", .{});
     }
+
+    try self.device.vkd.resetCommandPool(self.device.handle, frame.cmd_pool, .{});
+    try self.device.vkd.beginCommandBuffer(frame.cmd_buf, .{
+        .flags = .{.one_time_submit_bit = true},
+        .p_inheritance_info = null,
+    });
 }
 
 pub fn endFrame(self: *Self) !void {
     const frame = &self.frames[self.frame_nr % frame_overlap];
+    // TODO: Check that any error returned in the remainder of this function
+    // doesn't make VulkanRenderer hang during deinitialization.
+
+    try self.post_process_pipeline.draw(self, frame.cmd_buf);
+
+    try self.device.vkd.endCommandBuffer(frame.cmd_buf);
 
     const submit_info = vk.SubmitInfo{
         .wait_semaphore_count = 1,
         .p_wait_semaphores = asManyPtr(&frame.image_acquired),
         .p_wait_dst_stage_mask = &[_]vk.PipelineStageFlags{ .{.bottom_of_pipe_bit = true} },
-        .command_buffer_count = 0,
-        .p_command_buffers = undefined,
+        .command_buffer_count = 1,
+        .p_command_buffers = asManyPtr(&frame.cmd_buf),
         .signal_semaphore_count = 1,
         .p_signal_semaphores = asManyPtr(&frame.render_finished),
     };
@@ -227,6 +239,8 @@ const Frame = struct {
     image_acquired: vk.Semaphore,
     render_finished: vk.Semaphore,
     frame_fence: vk.Fence,
+    cmd_pool: vk.CommandPool,
+    cmd_buf: vk.CommandBuffer,
 
     fn init(device: *const Device) !Frame {
         const image_acquired = try device.vkd.createSemaphore(device.handle, .{.flags = .{}}, null);
@@ -238,14 +252,31 @@ const Frame = struct {
         const frame_fence = try device.vkd.createFence(device.handle, .{.flags = .{.signaled_bit = true}}, null);
         errdefer device.vkd.destroyFence(device.handle, frame_fence, null);
 
+        const cmd_pool = try device.vkd.createCommandPool(device.handle, .{
+            .flags = .{},
+            .queue_family_index = device.graphics_queue.family,
+        }, null);
+        errdefer device.vkd.destroyCommandPool(device.handle, cmd_pool, null);
+
+        var cmd_buf: vk.CommandBuffer = undefined;
+        try device.vkd.allocateCommandBuffers(device.handle, .{
+            .command_pool = cmd_pool,
+            .level = .primary,
+            .command_buffer_count = 1,
+        }, asManyPtr(&cmd_buf));
+
         return Frame{
             .image_acquired = image_acquired,
             .render_finished = render_finished,
             .frame_fence = frame_fence,
+            .cmd_pool = cmd_pool,
+            .cmd_buf = cmd_buf,
         };
     }
 
     fn deinit(self: *Frame, device: *const Device) void {
+        // Destroyign a command pool will also free its associated command buffers.
+        device.vkd.destroyCommandPool(device.handle, self.cmd_pool, null);
         device.vkd.destroyFence(device.handle, self.frame_fence, null);
         device.vkd.destroySemaphore(device.handle, self.render_finished, null);
         device.vkd.destroySemaphore(device.handle, self.image_acquired, null);

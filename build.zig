@@ -1,6 +1,7 @@
 const std = @import("std");
 const vkgen = @import("deps/vulkan-zig/generator/index.zig");
 const AssetStep = @import("src/build/AssetStep.zig");
+const VulkanShaderStep = @import("src/build/VulkanShaderStep.zig");
 
 const pkgs = struct {
     const network = std.build.Pkg{
@@ -104,6 +105,7 @@ fn addClientPackages(
     target: std.zig.CrossTarget,
     render_backend: RenderBackend,
     gen_vk: *vkgen.VkGenerateStep,
+    gen_shaders: *VulkanShaderStep,
     resources: std.build.Pkg,
 ) void {
     exe.addPackage(pkgs.network);
@@ -125,6 +127,9 @@ fn addClientPackages(
             } else {
                 @panic("vulkan not yet implemented yet for this target");
             }
+
+            exe.step.dependOn(&gen_shaders.step);
+            exe.addPackage(gen_shaders.package);
         },
         .software => {
             exe.addPackage(pkgs.pixel_draw);
@@ -212,6 +217,7 @@ pub fn build(b: *std.build.Builder) !void {
     const test_step = b.step("test", "Runs the test suite for all source filess");
 
     const gen_vk = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig");
+    const gen_shaders = try VulkanShaderStep.create(b, "glslc");
 
     const asset_gen_step = blk: {
         const obj_conv = b.addExecutable("obj-conv", "src/tools/obj-conv.zig");
@@ -324,7 +330,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const client = b.addExecutable("showdown", "src/client/main.zig");
-        addClientPackages(client, target, render_backend, gen_vk, asset_gen_step.package);
+        addClientPackages(client, target, render_backend, gen_vk, gen_shaders, asset_gen_step.package);
 
         client.addBuildOption(State, "initial_state", initial_state);
         client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);
@@ -390,7 +396,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     {
         const test_client = b.addTest("src/client/main.zig");
-        addClientPackages(test_client, target, render_backend, gen_vk, asset_gen_step.package);
+        addClientPackages(test_client, target, render_backend, gen_vk, gen_shaders, asset_gen_step.package);
 
         test_client.addBuildOption(State, "initial_state", initial_state);
         test_client.addBuildOption(bool, "enable_frame_counter", enable_frame_counter);

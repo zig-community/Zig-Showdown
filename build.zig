@@ -198,12 +198,16 @@ pub fn build(b: *std.build.Builder) !void {
         "embed-resources",
         "When set, the resources will be embedded into the binary.",
     ) orelse false;
-
     const debug_tools = b.option(
         bool,
         "debug-tools",
         "When set, the tools will be compiled in Debug mode, ReleaseSafe otherwise.",
     ) orelse false;
+    const glslc_path = b.option(
+        []const u8,
+        "glsl-path",
+        "Override the glslc path (Only used when -Drenderer=vulkan)"
+    } orelse "glslc",
 
     const tool_mode: std.builtin.Mode = if (debug_tools)
         .Debug
@@ -231,7 +235,7 @@ pub fn build(b: *std.build.Builder) !void {
         .vulkan => .{
             .vulkan = .{
                 .gen_bindings = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig"),
-                .gen_shaders = try VulkanShaderStep.create(b, "glslc"),
+                .gen_shaders = try VulkanShaderStep.create(b, glslc),
             }
         },
     };

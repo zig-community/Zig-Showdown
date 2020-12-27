@@ -1,12 +1,12 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const Context = @import("Context.zig");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
 const asManyPtr = @import("util.zig").asManyPtr;
 const Allocator = std.mem.Allocator;
 
 const Self = @This();
-const acquire_timeout = 1 * std.time.ns_per_s;
 
 /// This structure models a set of options that need to be considered when (re) creating
 /// a swapchain.
@@ -44,8 +44,7 @@ image_index: u32,
 
 /// Attempt to initialize a new swapchain.
 pub fn init(
-    instance: *const Instance,
-    device: *const Device,
+    ctx: *Context,
     allocator: *Allocator,
     create_info: CreateInfo,
 ) !Self {
@@ -59,8 +58,8 @@ pub fn init(
         .image_index = undefined,
     };
 
-    self.reinit(instance, device, create_info) catch |err| {
-        self.deinit(device);
+    self.reinit(ctx, create_info) catch |err| {
+        self.deinit(&ctx.device);
         return err;
     };
 
@@ -72,13 +71,12 @@ pub fn init(
 /// be called to deinitialize the swapchain regardless whether this function fails.
 pub fn reinit(
     self: *Self,
-    instance: *const Instance,
-    device: *const Device,
+    ctx: *Context,
     create_info: CreateInfo,
 ) !void {
-    const pdev = device.pdev.handle;
-    self.surface_format = try findSurfaceFormat(instance, pdev, create_info, self.allocator);
-    var present_mode = try findPresentMode(instance, pdev, create_info.surface, self.allocator);
+    const pdev = ctx.device.pdev.handle;
+    self.surface_format = try findSurfaceFormat(&ctx.instance, pdev, create_info, self.allocator);
+    var present_mode = try findPresentMode(&ctx.instance, pdev, create_info.surface, self.allocator);
 
     // There seems to be a bug in the validation layers that causes a message to be printed about
     // fifo being unsupported if getPhysicalDeviceSurfacePresentModesKHR is not called. To work around
@@ -89,7 +87,7 @@ pub fn reinit(
         present_mode = .fifo_khr;
     }
 
-    const caps = try instance.vki.getPhysicalDeviceSurfaceCapabilitiesKHR(pdev, create_info.surface);
+    const caps = try ctx.instance.vki.getPhysicalDeviceSurfaceCapabilitiesKHR(pdev, create_info.surface);
     self.extent = findActualExtent(caps, create_info.desired_extent);
 
     if (!caps.supported_usage_flags.contains(create_info.swap_image_usage)) {
@@ -102,7 +100,7 @@ pub fn reinit(
     }
 
     const old_handle = self.handle;
-    self.handle = try device.vkd.createSwapchainKHR(device.handle, .{
+    self.handle = try ctx.device.vkd.createSwapchainKHR(ctx.device.handle, .{
         .flags = .{},
         .surface = create_info.surface,
         .min_image_count = image_count,
@@ -121,14 +119,14 @@ pub fn reinit(
         .old_swapchain = self.handle,
     }, null);
 
-    // TODO: Destroy the handle *after* acquiring the first frame, the give the
+    // Destroy the handle *after* acquiring the first frame, the give the
     // presentation engine the opportunity to finish presenting to the old frames.
-    // It's technically valid to nuke the swapchain at any point, ut this should
+    // It's technically valid to nuke the swapchain at any point, but this should
     // be a little more efficient.
-    device.vkd.destroySwapchainKHR(device.handle, old_handle, null);
+    try ctx.deferDestruction(.{.swapchain = old_handle});
 
-    try self.fetchSwapImages(device);
-    try self.createImageViews(device);
+    try self.fetchSwapImages(&ctx.device);
+    try self.createImageViews(&ctx.device);
 
     self.image_index = undefined;
 }
@@ -155,7 +153,7 @@ pub const PresentState = enum {
 /// pixel layout, for example), .suboptimal is returned. When this function returns error.OutOfDateKHR (or .suboptimal)
 /// `self.reinit` should be called.
 pub fn acquireNextImage(self: *Self, device: *const Device, image_acquired: vk.Semaphore) !PresentState {
-    const result = try device.vkd.acquireNextImageKHR(device.handle, self.handle, acquire_timeout, image_acquired, .null_handle);
+    const result = try device.vkd.acquireNextImageKHR(device.handle, self.handle, Context.frame_timeout, image_acquired, .null_handle);
     self.image_index = result.image_index;
 
     return switch (result.result) {

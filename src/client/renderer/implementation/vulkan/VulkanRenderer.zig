@@ -16,11 +16,9 @@ const PostProcessPipeline = @import("PostProcessPipeline.zig");
 const asManyPtr = @import("util.zig").asManyPtr;
 const Allocator = std.mem.Allocator;
 
-pub const log = std.log.scoped(.vulkan);
+pub const log = Context.log;
 
 const Self = @This();
-const frame_overlap = 2;
-const frame_timeout = 1 * std.time.ns_per_s;
 
 pub const Configuration = struct {
     multisampling: ?u8 = null,
@@ -48,8 +46,7 @@ libvulkan: std.DynLib,
 ctx: Context,
 surface: vk.SurfaceKHR,
 swapchain: Swapchain,
-frame_nr: usize,
-frames: [frame_overlap]Frame,
+frames: [Context.frame_overlap]Frame,
 post_process_pipeline: PostProcessPipeline,
 
 pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
@@ -90,7 +87,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
 
     const window_dim = window.getSize();
     const qfi = ctx.device.uniqueQueueFamilies();
-    var swapchain = try Swapchain.init(&ctx.instance, &ctx.device, allocator, .{
+    var swapchain = try Swapchain.init(&ctx, allocator, .{
         .surface = surface,
         .vsync = false,
         .desired_extent = .{ .width = window_dim[0], .height = window_dim[1] },
@@ -101,7 +98,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
 
     log.info("Created swapchain with surface format {}", .{ @tagName(swapchain.surface_format.format) });
 
-    var frames: [frame_overlap]Frame = undefined;
+    var frames: [Context.frame_overlap]Frame = undefined;
     var n_successfully_created: usize = 0;
     errdefer for (frames[0 .. n_successfully_created]) |*frame| frame.deinit(&ctx.device);
     for (frames) |*frame, i| {
@@ -117,7 +114,6 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
         .ctx = ctx,
         .surface = surface,
         .swapchain = swapchain,
-        .frame_nr = 0,
         .frames = frames,
         .post_process_pipeline = ppp,
     };
@@ -126,8 +122,9 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
 }
 
 pub fn deinit(self: *Self) void {
-    log.debug("Rendered {} frames", .{ self.frame_nr });
+    log.debug("Rendered {} frames", .{ self.ctx.frame_nr });
 
+    // Wait until all frames are finished with rendering
     self.waitForAllFrames() catch |err| switch (err) {
         error.Timeout => log.warn("Recieved timeout during deinitialization, was endFrame called?", .{}),
         else => {
@@ -137,11 +134,16 @@ pub fn deinit(self: *Self) void {
         }
     };
 
+    // Destroy all objects that are queued for destruction before
+    // deinitializing the rest.
+    // self.ctx.destroy_queue.drain(&self.ctx.device);
+
     self.post_process_pipeline.deinit(&self.ctx);
 
     for (self.frames) |*frame| frame.deinit(&self.ctx.device);
     self.swapchain.deinit(&self.ctx.device);
     self.ctx.instance.vki.destroySurfaceKHR(self.ctx.instance.handle, self.surface, null);
+    self.ctx.deinit();
     self.ctx.device.deinit();
     self.ctx.instance.deinit();
     self.libvulkan.close();
@@ -149,8 +151,10 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn beginFrame(self: *Self) !void {
-    const frame = &self.frames[self.frame_nr % frame_overlap];
+    const frame = &self.frames[self.ctx.frameIndex()];
     try frame.wait(&self.ctx.device);
+
+    self.ctx.beginFrame();
 
     const present_state = self.swapchain.acquireNextImage(&self.ctx.device, frame.image_acquired) catch |err| switch (err) {
         error.OutOfDateKHR => return error.OutOfDateKHR, // TODO: Catch and reinitialize swapchain
@@ -170,7 +174,7 @@ pub fn beginFrame(self: *Self) !void {
 }
 
 pub fn endFrame(self: *Self) !void {
-    const frame = &self.frames[self.frame_nr % frame_overlap];
+    const frame = &self.frames[self.ctx.frameIndex()];
     // TODO: Check that any error returned in the remainder of this function
     // doesn't make VulkanRenderer hang during deinitialization.
 
@@ -191,7 +195,7 @@ pub fn endFrame(self: *Self) !void {
     try self.ctx.device.vkd.queueSubmit(self.ctx.device.graphics_queue.handle, 1, asManyPtr(&submit_info), frame.frame_fence);
     try self.swapchain.present(&self.ctx.device, &[_]vk.Semaphore{ frame.render_finished });
 
-    self.frame_nr += 1;
+    self.ctx.endFrame();
 }
 
 pub fn clear(self: *Self, rt: Renderer.RenderTarget, color: Color) void {
@@ -284,7 +288,7 @@ const Frame = struct {
 
     fn wait(self: Frame, device: *const Device) !void {
         const fence = asManyPtr(&self.frame_fence);
-        const result = try device.vkd.waitForFences(device.handle, 1, fence, vk.TRUE, frame_timeout);
+        const result = try device.vkd.waitForFences(device.handle, 1, fence, vk.TRUE, Context.frame_timeout);
         if (result == .timeout) {
             return error.Timeout;
         }

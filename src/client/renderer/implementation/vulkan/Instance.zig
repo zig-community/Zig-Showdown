@@ -207,16 +207,20 @@ pub const InstanceDispatch = struct {
     vkEnumerateDeviceExtensionProperties: vk.PfnEnumerateDeviceExtensionProperties,
     vkGetPhysicalDeviceProperties: vk.PfnGetPhysicalDeviceProperties,
     vkGetPhysicalDeviceMemoryProperties: vk.PfnGetPhysicalDeviceMemoryProperties,
-    vkGetPhysicalDeviceSurfaceFormatsKHR: vk.PfnGetPhysicalDeviceSurfaceFormatsKHR,
-    vkGetPhysicalDeviceSurfacePresentModesKHR: vk.PfnGetPhysicalDeviceSurfacePresentModesKHR,
     vkGetPhysicalDeviceQueueFamilyProperties: vk.PfnGetPhysicalDeviceQueueFamilyProperties,
-    vkGetPhysicalDeviceSurfaceSupportKHR: vk.PfnGetPhysicalDeviceSurfaceSupportKHR,
     vkGetPhysicalDeviceFormatProperties: vk.PfnGetPhysicalDeviceFormatProperties,
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR: vk.PfnGetPhysicalDeviceSurfaceCapabilitiesKHR,
-    vkCreateXlibSurfaceKHR: vk.PfnCreateXlibSurfaceKHR,
-    vkDestroySurfaceKHR: vk.PfnDestroySurfaceKHR,
     vkCreateDevice: vk.PfnCreateDevice,
     vkGetDeviceProcAddr: vk.PfnGetDeviceProcAddr,
+
+    // VK_KHR_surface
+    vkGetPhysicalDeviceSurfaceFormatsKHR: vk.PfnGetPhysicalDeviceSurfaceFormatsKHR,
+    vkGetPhysicalDeviceSurfacePresentModesKHR: vk.PfnGetPhysicalDeviceSurfacePresentModesKHR,
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR: vk.PfnGetPhysicalDeviceSurfaceCapabilitiesKHR,
+    vkGetPhysicalDeviceSurfaceSupportKHR: vk.PfnGetPhysicalDeviceSurfaceSupportKHR,
+    vkDestroySurfaceKHR: vk.PfnDestroySurfaceKHR,
+
+    // VK_KHR_xlib_surface
+    vkCreateXlibSurfaceKHR: vk.PfnCreateXlibSurfaceKHR,
 
     usingnamespace vk.InstanceWrapper(@This());
 };

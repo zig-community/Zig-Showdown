@@ -279,11 +279,6 @@ const DeviceDispatch = struct {
     vkDestroyDevice: vk.PfnDestroyDevice,
     vkGetDeviceQueue: vk.PfnGetDeviceQueue,
     vkQueueSubmit: vk.PfnQueueSubmit,
-    vkQueuePresentKHR: vk.PfnQueuePresentKHR,
-    vkCreateSwapchainKHR: vk.PfnCreateSwapchainKHR,
-    vkDestroySwapchainKHR: vk.PfnDestroySwapchainKHR,
-    vkGetSwapchainImagesKHR: vk.PfnGetSwapchainImagesKHR,
-    vkAcquireNextImageKHR: vk.PfnAcquireNextImageKHR,
     vkCreateImageView: vk.PfnCreateImageView,
     vkDestroyImageView: vk.PfnDestroyImageView,
     vkCreateSemaphore: vk.PfnCreateSemaphore,
@@ -312,6 +307,13 @@ const DeviceDispatch = struct {
     vkCmdEndRenderPass: vk.PfnCmdEndRenderPass,
     vkCmdBindPipeline: vk.PfnCmdBindPipeline,
     vkCmdDraw: vk.PfnCmdDraw,
+
+    // VK_KHR_swapchain
+    vkQueuePresentKHR: vk.PfnQueuePresentKHR,
+    vkCreateSwapchainKHR: vk.PfnCreateSwapchainKHR,
+    vkDestroySwapchainKHR: vk.PfnDestroySwapchainKHR,
+    vkGetSwapchainImagesKHR: vk.PfnGetSwapchainImagesKHR,
+    vkAcquireNextImageKHR: vk.PfnAcquireNextImageKHR,
 
     usingnamespace vk.DeviceWrapper(@This());
 };

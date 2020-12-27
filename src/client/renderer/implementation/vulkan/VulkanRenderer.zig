@@ -6,6 +6,7 @@ const Renderer = @import("../../../Renderer.zig");
 const Color = @import("../../Color.zig");
 const Resources = @import("Resources.zig");
 
+const Context = @import("Context.zig");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
 const Swapchain = @import("Swapchain.zig");
@@ -43,10 +44,8 @@ const device_extensions = [_][*:0]const u8{
     vk.extension_info.khr_swapchain.name,
 };
 
-allocator: *Allocator,
 libvulkan: std.DynLib,
-instance: Instance,
-device: Device,
+ctx: Context,
 surface: vk.SurfaceKHR,
 swapchain: Swapchain,
 frame_nr: usize,
@@ -85,43 +84,43 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
     };
     errdefer device.deinit();
 
-    log.info("Using device '{}'", .{device.pdev.name()});
+    var ctx = Context.init(allocator, instance, device);
+
+    log.info("Using device '{}'", .{ ctx.device.pdev.name() });
 
     const window_dim = window.getSize();
-    const qfi = device.uniqueQueueFamilies();
-    var swapchain = try Swapchain.init(&instance, &device, allocator, .{
+    const qfi = ctx.device.uniqueQueueFamilies();
+    var swapchain = try Swapchain.init(&ctx.instance, &ctx.device, allocator, .{
         .surface = surface,
         .vsync = false,
         .desired_extent = .{ .width = window_dim[0], .height = window_dim[1] },
         .swap_image_usage = .{ .color_attachment_bit = true },
         .queue_family_indices = qfi.asConstSlice(),
     });
-    errdefer swapchain.deinit(&device);
+    errdefer swapchain.deinit(&ctx.device);
 
     log.info("Created swapchain with surface format {}", .{ @tagName(swapchain.surface_format.format) });
 
     var frames: [frame_overlap]Frame = undefined;
     var n_successfully_created: usize = 0;
-    errdefer for (frames[0 .. n_successfully_created]) |*frame| frame.deinit(&device);
+    errdefer for (frames[0 .. n_successfully_created]) |*frame| frame.deinit(&ctx.device);
     for (frames) |*frame, i| {
-        frame.* = try Frame.init(&device);
+        frame.* = try Frame.init(&ctx.device);
         n_successfully_created = i;
     }
 
+    var ppp = try PostProcessPipeline.init(&ctx, &swapchain);
+    errdefer self.ppp.deinit(&self);
+
     var self = Self{
-        .allocator = allocator,
         .libvulkan = libvulkan,
-        .instance = instance,
-        .device = device,
+        .ctx = ctx,
         .surface = surface,
         .swapchain = swapchain,
         .frame_nr = 0,
         .frames = frames,
-        .post_process_pipeline = undefined,
+        .post_process_pipeline = ppp,
     };
-
-    self.post_process_pipeline = try PostProcessPipeline.init(&self);
-    errdefer self.post_process_pipeline.deinit(&self);
 
     return self;
 }
@@ -138,22 +137,22 @@ pub fn deinit(self: *Self) void {
         }
     };
 
-    self.post_process_pipeline.deinit(self);
+    self.post_process_pipeline.deinit(&self.ctx);
 
-    for (self.frames) |*frame| frame.deinit(&self.device);
-    self.swapchain.deinit(&self.device);
-    self.instance.vki.destroySurfaceKHR(self.instance.handle, self.surface, null);
-    self.device.deinit();
-    self.instance.deinit();
+    for (self.frames) |*frame| frame.deinit(&self.ctx.device);
+    self.swapchain.deinit(&self.ctx.device);
+    self.ctx.instance.vki.destroySurfaceKHR(self.ctx.instance.handle, self.surface, null);
+    self.ctx.device.deinit();
+    self.ctx.instance.deinit();
     self.libvulkan.close();
     self.* = undefined;
 }
 
 pub fn beginFrame(self: *Self) !void {
     const frame = &self.frames[self.frame_nr % frame_overlap];
-    try frame.wait(&self.device);
+    try frame.wait(&self.ctx.device);
 
-    const present_state = self.swapchain.acquireNextImage(&self.device, frame.image_acquired) catch |err| switch (err) {
+    const present_state = self.swapchain.acquireNextImage(&self.ctx.device, frame.image_acquired) catch |err| switch (err) {
         error.OutOfDateKHR => return error.OutOfDateKHR, // TODO: Catch and reinitialize swapchain
         else => |other| return other,
     };
@@ -163,8 +162,8 @@ pub fn beginFrame(self: *Self) !void {
         log.alert("Swapchain suboptimal or out of date\n", .{});
     }
 
-    try self.device.vkd.resetCommandPool(self.device.handle, frame.cmd_pool, .{});
-    try self.device.vkd.beginCommandBuffer(frame.cmd_buf, .{
+    try self.ctx.device.vkd.resetCommandPool(self.ctx.device.handle, frame.cmd_pool, .{});
+    try self.ctx.device.vkd.beginCommandBuffer(frame.cmd_buf, .{
         .flags = .{.one_time_submit_bit = true},
         .p_inheritance_info = null,
     });
@@ -175,9 +174,9 @@ pub fn endFrame(self: *Self) !void {
     // TODO: Check that any error returned in the remainder of this function
     // doesn't make VulkanRenderer hang during deinitialization.
 
-    try self.post_process_pipeline.draw(self, frame.cmd_buf);
+    try self.post_process_pipeline.draw(&self.ctx, &self.swapchain, frame.cmd_buf);
 
-    try self.device.vkd.endCommandBuffer(frame.cmd_buf);
+    try self.ctx.device.vkd.endCommandBuffer(frame.cmd_buf);
 
     const submit_info = vk.SubmitInfo{
         .wait_semaphore_count = 1,
@@ -189,8 +188,8 @@ pub fn endFrame(self: *Self) !void {
         .p_signal_semaphores = asManyPtr(&frame.render_finished),
     };
 
-    try self.device.vkd.queueSubmit(self.device.graphics_queue.handle, 1, asManyPtr(&submit_info), frame.frame_fence);
-    try self.swapchain.present(&self.device, &[_]vk.Semaphore{ frame.render_finished });
+    try self.ctx.device.vkd.queueSubmit(self.ctx.device.graphics_queue.handle, 1, asManyPtr(&submit_info), frame.frame_fence);
+    try self.swapchain.present(&self.ctx.device, &[_]vk.Semaphore{ frame.render_finished });
 
     self.frame_nr += 1;
 }
@@ -232,7 +231,7 @@ pub fn createModel(self: *Self, model: *Resources.Model) Texture {
 pub fn destroyModel(self: *Self, model: *Model) void {}
 
 fn waitForAllFrames(self: *Self) !void {
-    for (self.frames) |frame| try frame.wait(&self.device);
+    for (self.frames) |frame| try frame.wait(&self.ctx.device);
 }
 
 const Frame = struct {

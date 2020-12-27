@@ -2,9 +2,8 @@ const std = @import("std");
 const vk = @import("vulkan");
 const shaders = @import("showdown-vulkan-shaders");
 
-const Device = @import("Device.zig");
-const Swapchain = @import("Device.zig");
-const VulkanRenderer = @import("VulkanRenderer.zig");
+const Context = @import("Context.zig");
+const Swapchain = @import("Swapchain.zig");
 
 const asManyPtr = @import("util.zig").asManyPtr;
 
@@ -28,55 +27,55 @@ framebuffers: []vk.Framebuffer,
 pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 
-pub fn init(r: *VulkanRenderer) !Self {
+pub fn init(ctx: *Context, swapchain: *Swapchain) !Self {
     var self = Self{
         .render_pass = .null_handle,
-        .framebuffers = try r.allocator.alloc(vk.Framebuffer, 0),
+        .framebuffers = try ctx.allocator.alloc(vk.Framebuffer, 0),
         .pipeline_layout = .null_handle,
         .pipeline = .null_handle,
     };
-    errdefer self.deinit(r);
+    errdefer self.deinit(ctx);
 
-    try self.initRenderPass(r);
-    try self.initFramebuffers(r);
-    try self.initPipelineLayout(r);
-    try self.initPipeline(r);
+    try self.initRenderPass(ctx, swapchain);
+    try self.initFramebuffers(ctx, swapchain);
+    try self.initPipelineLayout(ctx);
+    try self.initPipeline(ctx, swapchain);
 
     return self;
 }
 
-pub fn deinit(self: Self, r: *const VulkanRenderer) void {
-    r.device.vkd.destroyPipeline(r.device.handle, self.pipeline, null);
-    r.device.vkd.destroyPipelineLayout(r.device.handle, self.pipeline_layout, null);
+pub fn deinit(self: Self, ctx: *Context) void {
+    ctx.device.vkd.destroyPipeline(ctx.device.handle, self.pipeline, null);
+    ctx.device.vkd.destroyPipelineLayout(ctx.device.handle, self.pipeline_layout, null);
 
     for (self.framebuffers) |fb| {
-        r.device.vkd.destroyFramebuffer(r.device.handle, fb, null);
+        ctx.device.vkd.destroyFramebuffer(ctx.device.handle, fb, null);
     }
 
-    r.allocator.free(self.framebuffers);
-    r.device.vkd.destroyRenderPass(r.device.handle, self.render_pass, null);
+    ctx.allocator.free(self.framebuffers);
+    ctx.device.vkd.destroyRenderPass(ctx.device.handle, self.render_pass, null);
 }
 
-pub fn draw(self: *Self, r: *VulkanRenderer, cmd_buf: vk.CommandBuffer) !void {
-    r.device.vkd.cmdBeginRenderPass(cmd_buf, .{
+pub fn draw(self: *Self, ctx: *Context, swapchain: *Swapchain, cmd_buf: vk.CommandBuffer) !void {
+    ctx.device.vkd.cmdBeginRenderPass(cmd_buf, .{
         .render_pass = self.render_pass,
-        .framebuffer = self.framebuffers[r.swapchain.image_index],
+        .framebuffer = self.framebuffers[swapchain.image_index],
         .render_area = .{
             .offset = .{.x = 0, .y = 0},
-            .extent = r.swapchain.extent,
+            .extent = swapchain.extent,
         },
         .clear_value_count = 0,
         .p_clear_values = undefined,
     }, .@"inline");
-    r.device.vkd.cmdBindPipeline(cmd_buf, .graphics, self.pipeline);
-    r.device.vkd.cmdDraw(cmd_buf, 3, 1, 0, 0);
-    r.device.vkd.cmdEndRenderPass(cmd_buf);
+    ctx.device.vkd.cmdBindPipeline(cmd_buf, .graphics, self.pipeline);
+    ctx.device.vkd.cmdDraw(cmd_buf, 3, 1, 0, 0);
+    ctx.device.vkd.cmdEndRenderPass(cmd_buf);
 }
 
-fn initRenderPass(self: *Self, r: *VulkanRenderer) !void {
+fn initRenderPass(self: *Self, ctx: *Context, swapchain: *Swapchain) !void {
     const color_attachment = vk.AttachmentDescription{
         .flags = .{},
-        .format = r.swapchain.surface_format.format,
+        .format = swapchain.surface_format.format,
         .samples = .{.@"1_bit" = true},
         .load_op = .dont_care, // Fullscreen quad overwrites everything
         .store_op = .store,
@@ -104,7 +103,7 @@ fn initRenderPass(self: *Self, r: *VulkanRenderer) !void {
         .p_preserve_attachments = undefined,
     };
 
-    self.render_pass = try r.device.vkd.createRenderPass(r.device.handle, .{
+    self.render_pass = try ctx.device.vkd.createRenderPass(ctx.device.handle, .{
         .flags = .{},
         .attachment_count = 1,
         .p_attachments = asManyPtr(&color_attachment),
@@ -115,29 +114,29 @@ fn initRenderPass(self: *Self, r: *VulkanRenderer) !void {
     }, null);
 }
 
-fn initFramebuffers(self: *Self, r: *VulkanRenderer) !void {
+fn initFramebuffers(self: *Self, ctx: *Context, swapchain: *Swapchain) !void {
     // TODO: Delete currently existing framebuffers (if any) when resizing
-    self.framebuffers = try r.allocator.alloc(vk.Framebuffer, r.swapchain.images.len);
+    self.framebuffers = try ctx.allocator.alloc(vk.Framebuffer, swapchain.images.len);
     std.mem.set(vk.Framebuffer, self.framebuffers, .null_handle);
 
     // We don't need errdefer in this function, its handled in deinit(), and by
     // the fact that self.framebuffers is set to null_handle
 
     for (self.framebuffers) |*fb, i| {
-        fb.* = try r.device.vkd.createFramebuffer(r.device.handle, .{
+        fb.* = try ctx.device.vkd.createFramebuffer(ctx.device.handle, .{
             .flags = .{},
             .render_pass = self.render_pass,
             .attachment_count = 1,
-            .p_attachments = asManyPtr(&r.swapchain.image_views[i]),
-            .width = r.swapchain.extent.width,
-            .height = r.swapchain.extent.height,
+            .p_attachments = asManyPtr(&swapchain.image_views[i]),
+            .width = swapchain.extent.width,
+            .height = swapchain.extent.height,
             .layers = 1,
         }, null);
     }
 }
 
-fn initPipelineLayout(self: *Self, r: *VulkanRenderer) !void {
-    self.pipeline_layout = try r.device.vkd.createPipelineLayout(r.device.handle, .{
+fn initPipelineLayout(self: *Self, ctx: *Context) !void {
+    self.pipeline_layout = try ctx.device.vkd.createPipelineLayout(ctx.device.handle, .{
         .flags = .{},
         .set_layout_count = 0,
         .p_set_layouts = undefined,
@@ -146,20 +145,20 @@ fn initPipelineLayout(self: *Self, r: *VulkanRenderer) !void {
     }, null);
 }
 
-fn initPipeline(self: *Self, r: *VulkanRenderer) !void {
-    const vert = try r.device.vkd.createShaderModule(r.device.handle, .{
+fn initPipeline(self: *Self, ctx: *Context, swapchain: *Swapchain) !void {
+    const vert = try ctx.device.vkd.createShaderModule(ctx.device.handle, .{
         .flags = .{},
         .code_size = shaders.post_process_vert.len,
         .p_code = @ptrCast([*]const u32, shaders.post_process_vert),
     }, null);
-    defer r.device.vkd.destroyShaderModule(r.device.handle, vert, null);
+    defer ctx.device.vkd.destroyShaderModule(ctx.device.handle, vert, null);
 
-    const frag = try r.device.vkd.createShaderModule(r.device.handle, .{
+    const frag = try ctx.device.vkd.createShaderModule(ctx.device.handle, .{
         .flags = .{},
         .code_size = shaders.post_process_frag.len,
         .p_code = @ptrCast([*]const u32, shaders.post_process_frag),
     }, null);
-    defer r.device.vkd.destroyShaderModule(r.device.handle, frag, null);
+    defer ctx.device.vkd.destroyShaderModule(ctx.device.handle, frag, null);
 
     const pssci = [_]vk.PipelineShaderStageCreateInfo {
         .{
@@ -197,8 +196,8 @@ fn initPipeline(self: *Self, r: *VulkanRenderer) !void {
     const viewport = vk.Viewport{
         .x = 0,
         .y = 0,
-        .width = @intToFloat(f32, r.swapchain.extent.width),
-        .height = @intToFloat(f32, r.swapchain.extent.height),
+        .width = @intToFloat(f32, swapchain.extent.width),
+        .height = @intToFloat(f32, swapchain.extent.height),
         .min_depth = 0,
         .max_depth = 1,
     };
@@ -206,7 +205,7 @@ fn initPipeline(self: *Self, r: *VulkanRenderer) !void {
     // TODO: Replace by dynamic state
     const scissor = vk.Rect2D{
         .offset = .{.x = 0, .y = 0},
-        .extent = r.swapchain.extent,
+        .extent = swapchain.extent,
     };
 
     const pvsci = vk.PipelineViewportStateCreateInfo{
@@ -283,8 +282,8 @@ fn initPipeline(self: *Self, r: *VulkanRenderer) !void {
         .base_pipeline_index = -1,
     };
 
-    _ = try r.device.vkd.createGraphicsPipelines(
-        r.device.handle,
+    _ = try ctx.device.vkd.createGraphicsPipelines(
+        ctx.device.handle,
         .null_handle,
         1, asManyPtr(&gpci),
         null,

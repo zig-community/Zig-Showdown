@@ -19,6 +19,7 @@ pub fn init(
     instance: Instance,
     pdev: PhysicalDevice,
     extensions: []const [*:0]const u8,
+    features: ?*const c_void,
     qa: QueueAllocation
 ) !Self {
     // As some of the queue families may alias, we need to pay mind about handling those.
@@ -47,6 +48,7 @@ pub fn init(
     }
 
     const handle = try instance.vki.createDevice(pdev.handle, .{
+        .p_next = features,
         .flags = .{},
         .queue_create_info_count = qci_buffer.len,
         .p_queue_create_infos = &qci_buffer.items,

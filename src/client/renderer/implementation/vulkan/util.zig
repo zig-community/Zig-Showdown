@@ -1,4 +1,5 @@
 const std = @import("std");
+const vk = @import("vulkan");
 
 fn ManyPtr(comptime Ptr: type) type {
     var type_info = @typeInfo(Ptr);
@@ -20,6 +21,27 @@ pub fn asManyPtr(ptr: anytype) ManyPtr(@TypeOf(ptr)) {
     // For some reason this doesn't work with @as
     const x: ArrayPtr(@TypeOf(ptr)) = ptr;
     return x;
+}
+
+pub fn initFeatures(comptime Features: type, overrides: anytype) Features {
+    var features: Features = undefined;
+
+    // Initialize the features to all false (or struct member default)
+    inline for (std.meta.fields(Features)) |field| {
+        if (field.default_value) |default| {
+            @field(features, field.name) = default;
+        } else {
+            std.debug.assert(field.field_type == vk.Bool32);
+            @field(features, field.name) = vk.FALSE;
+        }
+    }
+
+    // Override the fields passed in the overrides struct
+    inline for (std.meta.fields(@TypeOf(overrides))) |field| {
+        @field(features, field.name) = @field(overrides, field.name);
+    }
+
+    return features;
 }
 
 pub fn SmallBuf(comptime max_size: comptime_int, comptime T: type) type {

@@ -20,7 +20,7 @@ pub fn create(builder: *Builder, glslc_path: []const u8) !*Self {
         "shaders.zig",
     });
 
-    const glslc_cmd = try builder.allocator.dupe([]const u8, &[_][]const u8{ glslc_path, "--target-env=vulkan1.0", "-Werror" });
+    const glslc_cmd = try builder.allocator.dupe([]const u8, &[_][]const u8{ glslc_path, "--target-env=vulkan1.2", "-Werror" });
 
     self.* = .{
         .step = Step.init(.Custom, "vulkan-shaders", builder.allocator, make),

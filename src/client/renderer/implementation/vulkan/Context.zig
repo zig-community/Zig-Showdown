@@ -7,12 +7,12 @@ const Device = @import("Device.zig");
 
 const Allocator = std.mem.Allocator;
 
+const Self = @This();
+
 pub const log = std.log.scoped(.vulkan);
 
 pub const frame_overlap = 2;
 pub const frame_timeout = 1 * std.time.ns_per_s;
-
-const Self = @This();
 
 allocator: *Allocator,
 instance: Instance,

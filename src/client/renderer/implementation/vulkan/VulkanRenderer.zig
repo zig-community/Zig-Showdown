@@ -1,6 +1,8 @@
 const std = @import("std");
 const zwl = @import("zwl");
 const vk = @import("vulkan");
+const util = @import("util.zig");
+
 const WindowPlatform = @import("../../../main.zig").WindowPlatform;
 const Renderer = @import("../../../Renderer.zig");
 const Color = @import("../../Color.zig");
@@ -29,7 +31,7 @@ const app_info = vk.ApplicationInfo{
     .application_version = vk.makeVersion(0, 0, 0),
     .p_engine_name = "SHOWDOWN (Vulkan)",
     .engine_version = vk.makeVersion(0, 0, 0),
-    .api_version = vk.API_VERSION_1_0,
+    .api_version = vk.API_VERSION_1_2,
 };
 
 const instance_extensions = [_][*:0]const u8{
@@ -41,6 +43,13 @@ const instance_extensions = [_][*:0]const u8{
 const device_extensions = [_][*:0]const u8{
     vk.extension_info.khr_swapchain.name,
 };
+
+const required_descriptor_indexing_features = util.initFeatures(vk.PhysicalDeviceDescriptorIndexingFeatures, .{
+        .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
+        .descriptor_binding_partially_bound = vk.TRUE,
+        .descriptor_binding_variable_descriptor_count = vk.TRUE,
+        .runtime_descriptor_array = vk.TRUE,
+    });
 
 libvulkan: std.DynLib,
 ctx: Context,
@@ -72,6 +81,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
     var device = instance.findAndCreateDevice(allocator, .{
         .surface = surface,
         .required_extensions = &device_extensions,
+        .required_features = @ptrCast(*const c_void, &required_descriptor_indexing_features),
     }) catch |err| switch (err) {
         error.NoSuitableDevice => {
             log.crit("Failed to find a suitable GPU", .{});
@@ -133,10 +143,6 @@ pub fn deinit(self: *Self) void {
             return;
         }
     };
-
-    // Destroy all objects that are queued for destruction before
-    // deinitializing the rest.
-    // self.ctx.destroy_queue.drain(&self.ctx.device);
 
     self.post_process_pipeline.deinit(&self.ctx);
 

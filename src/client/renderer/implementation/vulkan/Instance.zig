@@ -113,6 +113,9 @@ const DeviceRequirements = struct {
 
     /// A list of extensions that the device needs to support.
     required_extensions: []const [*:0]const u8,
+
+    /// A p_next chain of features that the device should support
+    required_features: ?*const c_void = null,
 };
 
 /// Attempt to find *any* device that supports surface and has the required extensions and
@@ -169,7 +172,19 @@ pub fn findAndCreateDevice(
         defer queues.deinit(allocator);
 
         // Everything seems to be fine, create the device.
-        return Device.init(self, pdev, requirements.required_extensions, queues);
+        return Device.init(self, pdev, requirements.required_extensions, requirements.required_features, queues) catch |err| switch (err) {
+            // As this would be a lot of code, we currently don't explicitly check whether
+            // a device supports any of the required features. Instead, we simply attempt
+            // to initialize the device with the chain of required features, and continue
+            // searching for another device if that fails.
+            error.FeatureNotPresent => {
+                log.info(msg_base_fmt ++ " Required features not present", msg_base_args);
+                continue;
+            },
+            // We explicitly checked for this.
+            error.ExtensionNotPresent => unreachable,
+            else => |narrow| return narrow,
+        };
     }
 
     return error.NoSuitableDevice;

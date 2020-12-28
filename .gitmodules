@@ -34,3 +34,6 @@
 [submodule "deps/libsoundio"]
 	path = deps/libsoundio
 	url = https://github.com/andrewrk/libsoundio
+[submodule "deps/dr_libs"]
+	path = deps/dr_libs
+	url = https://github.com/mackron/dr_libs

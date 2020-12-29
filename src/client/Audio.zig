@@ -517,8 +517,9 @@ test "EventQueue" {
 
         // not needed for the test
         .sound = undefined,
-        .left_vol = undefined,
-        .right_vol = undefined,
+        .pan = undefined,
+        .volume = undefined,
+        .group = undefined,
     }} ** 10;
     for (events) |*e, i| {
         e.start_time = 10 * i;

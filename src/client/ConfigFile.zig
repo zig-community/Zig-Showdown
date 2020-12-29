@@ -15,6 +15,31 @@ pub const Video = struct {
     fullscreen: bool = false,
 };
 
+pub const Audio = struct {
+    /// Index of the audio device to be used or `null` if none
+    device_index: ?u16 = null,
+
+    volume: Volume = .{},
+
+    pub const Volume = struct {
+        /// Total volume of the game, this affects everything
+        master: f32 = 1.0,
+
+        /// This volume affects sounds from the group "voice"
+        voice: f32 = 1.0,
+
+        /// This volume affects sounds from the group "interface"
+        interface: f32 = 1.0,
+
+        /// This volume affects sounds from the group "effects"
+        effects: f32 = 1.0,
+
+        /// This volume affects sounds from the group "music"
+        music: f32 = 1.0,
+    };
+};
+
 keymap: KeyMapping = .{},
 video: Video = .{},
+audio: Audio = .{},
 name: []const u8 = "Ziguana",

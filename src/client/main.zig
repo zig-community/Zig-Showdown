@@ -36,6 +36,26 @@ pub const WindowPlatform = zwl.Platform(.{
 /// a platform-independent matter
 pub const Renderer = @import("Renderer.zig");
 
+const Config = struct {
+    const Self = @This();
+    const Tree = zzz.ZTree(10, 100);
+
+    memory: std.heap.ArenaAllocator,
+    text: []const u8,
+    tree: Tree,
+    root: *zzz.ZNode,
+    imprint: zzz.Imprint(ConfigFile),
+
+    pub fn get(self: *const Self) *const ConfigFile {
+        return &self.imprint.result;
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.memory.deinit();
+        self.* = undefined;
+    }
+};
+
 pub fn main() anyerror!u8 {
     defer _ = gpa.deinit();
 
@@ -58,40 +78,36 @@ pub fn main() anyerror!u8 {
         return 0;
     }
 
-    const config = cli.options.@"config-file" orelse "showdown.conf";
+    const config_file_name = cli.options.@"config-file" orelse "showdown.conf";
 
-    // Do not use this for allocation, it is only a placeholder
-    // to be replaced by the zzz parser.
-    var config_buffer_arena = std.heap.ArenaAllocator.init(global_allocator);
-    defer config_buffer_arena.deinit();
+    var config = Config{
+        .memory = std.heap.ArenaAllocator.init(global_allocator),
+        .text = undefined,
+        .tree = .{},
+        .root = undefined,
+        .imprint = undefined,
+    };
+    defer config.deinit();
 
-    var config_file: ConfigFile = if (std.fs.cwd().readFileAlloc(global_allocator, config, 500_000)) |file_buffer| blk: {
-        defer global_allocator.free(file_buffer);
+    {
+        config.text = std.fs.cwd().readFileAlloc(&config.memory.allocator, config_file_name, 500_000) catch |err| switch (err) {
+            error.FileNotFound => "", // empty config
+            else => |e| return e,
+        };
 
-        var tree = zzz.ZTree(10, 100){};
-
-        var node = try tree.appendText(file_buffer);
-
-        node.convertStrings();
+        config.root = try config.tree.appendText(config.text);
+        config.root.convertStrings();
 
         // for debugging:
-        // tree.show();
+        // config.tree.show();
 
-        var cfg = try node.imprintAlloc(ConfigFile, global_allocator);
-
-        config_buffer_arena.deinit();
-        config_buffer_arena = cfg.arena;
-
-        break :blk cfg.result;
-    } else |err| switch (err) {
-        error.FileNotFound => ConfigFile{}, // Just use the default values here
-        else => |e| return e,
-    };
+        config.imprint = try config.root.imprintAlloc(ConfigFile, &config.memory.allocator);
+    }
 
     // Do not init windowing before necessary. We don't need a window
     // for printing a help string.
 
-    var audio = try Audio.init(global_allocator);
+    var audio = try Audio.init(global_allocator, config.get().audio);
     defer audio.deinit();
 
     var platform = try WindowPlatform.init(global_allocator, .{});
@@ -99,8 +115,8 @@ pub fn main() anyerror!u8 {
 
     var window = try platform.createWindow(.{
         .title = "Zig SHOWDOWN",
-        .width = config_file.video.resolution[0],
-        .height = config_file.video.resolution[1],
+        .width = config.get().video.resolution[0],
+        .height = config.get().video.resolution[1],
         .resizeable = false,
         .track_damage = switch (build_options.render_backend) {
             .opengl => true,
@@ -145,73 +161,75 @@ pub fn main() anyerror!u8 {
         try audio.update();
 
         const event = try platform.waitForEvent();
-        switch (event) {
-            .WindowResized => |win| {
-                const size = win.getSize();
-                std.log.debug("*notices size {}x{}* OwO what's this", .{ size[0], size[1] });
-            },
+        {
+            switch (event) {
+                .WindowResized => |win| {
+                    const size = win.getSize();
+                    std.log.debug("*notices size {}x{}* OwO what's this", .{ size[0], size[1] });
+                },
 
-            // someone closed the window, just stop the game:
-            .WindowDestroyed, .ApplicationTerminated => break :main_loop,
+                // someone closed the window, just stop the game:
+                .WindowDestroyed, .ApplicationTerminated => break :main_loop,
 
-            .WindowDamaged, .WindowVBlank => {
+                .WindowDamaged, .WindowVBlank => {
 
-                // Lockstep updates with renderer for now
-                {
-                    const update_delta = @intToFloat(f32, update_timer.lap()) / std.time.ns_per_s;
-                    try game.update(input, stretch_factor * update_delta);
-                }
-
-                input.resetEvents();
-
-                // After updating, render the game
-                {
-                    try renderer.beginFrame();
-                    const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
-                    try game.render(&renderer, stretch_factor * render_delta);
-                    try renderer.endFrame();
-                }
-
-                if (boottime_timer) |timer| {
-                    std.log.debug("time to first image: {} µs", .{timer.read() / 1000});
-                    boottime_timer = null;
-                }
-            },
-
-            .KeyUp, .KeyDown => |ev| {
-                const button: ?Input.Button = blk: inline for (std.meta.fields(Input.Button)) |fld| {
-                    // ignore mouse buttons
-                    if (!comptime std.mem.eql(u8, fld.name, "left_mouse")) {
-                        for (@field(config_file.keymap, fld.name)) |scancode| {
-                            if (ev.scancode == scancode)
-                                break :blk @field(Input.Button, fld.name);
-                        }
+                    // Lockstep updates with renderer for now
+                    {
+                        const update_delta = @intToFloat(f32, update_timer.lap()) / std.time.ns_per_s;
+                        try game.update(input, stretch_factor * update_delta);
                     }
-                } else null;
 
-                if (button) |btn| {
-                    input.updateButton(btn, event == .KeyDown);
-                } else {
-                    std.log.info("unknown button pressed: {}", .{ev.scancode});
-                }
+                    input.resetEvents();
 
-                if (event == .KeyDown)
-                    input.any_button_was_pressed = true;
-                if (event == .KeyUp)
-                    input.any_button_was_released = false;
-            },
+                    // After updating, render the game
+                    {
+                        try renderer.beginFrame();
+                        const render_delta = @intToFloat(f32, render_timer.lap()) / std.time.ns_per_s;
+                        try game.render(&renderer, stretch_factor * render_delta);
+                        try renderer.endFrame();
+                    }
 
-            .MouseButtonDown, .MouseButtonUp => |ev| {
-                switch (ev.button) {
-                    .left => input.updateButton(.left_mouse, event == .MouseButtonDown),
-                    else => {},
-                }
-            },
+                    if (boottime_timer) |timer| {
+                        std.log.debug("time to first image: {} µs", .{timer.read() / 1000});
+                        boottime_timer = null;
+                    }
+                },
 
-            .MouseMotion => |ev| {
-                input.mouse_x = ev.x;
-                input.mouse_y = ev.y;
-            },
+                .KeyUp, .KeyDown => |ev| {
+                    const button: ?Input.Button = blk: inline for (std.meta.fields(Input.Button)) |fld| {
+                        // ignore mouse buttons
+                        if (!comptime std.mem.eql(u8, fld.name, "left_mouse")) {
+                            for (@field(config.get().keymap, fld.name)) |scancode| {
+                                if (ev.scancode == scancode)
+                                    break :blk @field(Input.Button, fld.name);
+                            }
+                        }
+                    } else null;
+
+                    if (button) |btn| {
+                        input.updateButton(btn, event == .KeyDown);
+                    } else {
+                        std.log.info("unknown button pressed: {}", .{ev.scancode});
+                    }
+
+                    if (event == .KeyDown)
+                        input.any_button_was_pressed = true;
+                    if (event == .KeyUp)
+                        input.any_button_was_released = false;
+                },
+
+                .MouseButtonDown, .MouseButtonUp => |ev| {
+                    switch (ev.button) {
+                        .left => input.updateButton(.left_mouse, event == .MouseButtonDown),
+                        else => {},
+                    }
+                },
+
+                .MouseMotion => |ev| {
+                    input.mouse_x = ev.x;
+                    input.mouse_y = ev.y;
+                },
+            }
         }
     }
 

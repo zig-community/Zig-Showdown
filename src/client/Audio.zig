@@ -7,6 +7,8 @@ const Self = @This();
 
 pub const Sound = @import("resources/Sound.zig");
 
+const Config = @import("ConfigFile.zig").Audio;
+
 allocator: *std.mem.Allocator,
 interface: *soundio.SoundIo,
 outstream: *soundio.OutStream,
@@ -16,6 +18,8 @@ event_pool: EventPool,
 event_queue: EventQueue,
 
 current_time: usize = 0,
+
+config: Config,
 
 fn trySound(err: c_int) !void {
     if (err == 0)
@@ -44,7 +48,7 @@ fn trySound(err: c_int) !void {
     };
 }
 
-pub fn init(allocator: *std.mem.Allocator) !*Self {
+pub fn init(allocator: *std.mem.Allocator, config: Config) !*Self {
     var interface = soundio.SoundIo.create() orelse return error.OutOfMemory;
     errdefer interface.destroy();
 
@@ -54,16 +58,21 @@ pub fn init(allocator: *std.mem.Allocator) !*Self {
 
     interface.flushEvents();
 
-    var default_out_device_index = interface.defaultOutputDeviceIndex();
-    if (default_out_device_index < 0)
-        return error.NoSoundDevice;
+    const output_device_index = if (config.device_index) |index|
+        index
+    else blk: {
+        const default_out_device_index = interface.defaultOutputDeviceIndex();
+        if (default_out_device_index < 0)
+            return error.NoSoundDevice;
+        break :blk @intCast(u16, default_out_device_index);
+    };
 
-    var device = interface.getOutputDevice(default_out_device_index) orelse return error.OutOfMemory;
+    const device = interface.getOutputDevice(output_device_index) orelse return error.OutOfMemory;
     errdefer device.unref();
 
     log.info("Output device: {}", .{std.mem.span(device.*.name)});
 
-    var outstream = soundio.OutStream.create(device) orelse return error.OutOfMemory;
+    const outstream = soundio.OutStream.create(device) orelse return error.OutOfMemory;
     errdefer outstream.destroy();
     outstream.format = if (std.builtin.endian == .Little) soundio.Format.Float32LE else soundio.Format.Float32BE;
     outstream.write_callback = writeCallback;
@@ -78,6 +87,8 @@ pub fn init(allocator: *std.mem.Allocator) !*Self {
         .interface = interface,
         .outstream = outstream,
         .device = device,
+
+        .config = config,
 
         .event_pool = EventPool.init(allocator),
         .event_queue = EventQueue.init(),
@@ -131,22 +142,34 @@ pub const PlaybackOptions = struct {
     // count: ?usize = 1,
 };
 
-pub fn playSound(self: *Self, sound: Sound, options: PlaybackOptions) !void {
-    const pleft = std.math.clamp(1.0 - options.pan, 0.0, 1.0); // pan=0 → pleft=1, pan=1 → pleft=0
-    const pright = std.math.clamp(1.0 + options.pan, 0.0, 1.0); // pan=0 → pright=1, pan=-1 → pleft=0
+pub const AudioGroup = enum {
+    /// This sound is related to voice output (like the announcer)
+    voice,
 
+    /// This sound is related to interface sounds (like button clicks)
+    interface,
+
+    /// This sound is related to ingame effects (like explosions)
+    effects,
+
+    /// This sound is music
+    music,
+};
+
+pub fn playSound(self: *Self, sound: Sound, group: AudioGroup, options: PlaybackOptions) !void {
     const current_time = @atomicLoad(usize, &self.current_time, .Acquire);
 
     const event = try self.event_pool.createEvent();
     event.* = SoundEvent{
         .sound = sound,
-        .left_vol = pleft * options.volume,
-        .right_vol = pright * options.volume,
+        .volume = options.volume,
+        .pan = options.pan,
         .start_time = if (options.start_time) |start_time|
             current_time + @floatToInt(usize, @intToFloat(f32, self.outstream.sample_rate) * start_time + 0.5)
         else
             current_time,
         .count = 0,
+        .group = group,
     };
 
     self.event_queue.enqueue(event);
@@ -237,13 +260,23 @@ fn writeCallback(outstream: *soundio.OutStream, _frame_count_min: c_int, _frame_
                 //     count,
                 // });
 
+                const vol = event.volume * switch (event.group) {
+                    .voice => self.config.volume.voice,
+                    .interface => self.config.volume.interface,
+                    .effects => self.config.volume.effects,
+                    .music => self.config.volume.music,
+                };
+
+                const pleft = vol * std.math.clamp(1.0 - event.pan, 0.0, 1.0); // pan=0 → pleft=1, pan=1 → pleft=0
+                const pright = vol * std.math.clamp(1.0 + event.pan, 0.0, 1.0); // pan=0 → pright=1, pan=-1 → pleft=0
+
                 var offset: usize = 0;
                 while (offset < count) : (offset += 1) {
                     const sample = event.sound.samples[start_in_sound + offset];
                     for (channels) |*chan, i| {
                         const chan_sample = sample * switch (i % 2) {
-                            0 => event.left_vol,
-                            1 => event.right_vol,
+                            0 => pleft,
+                            1 => pright,
                             else => unreachable,
                         };
                         @ptrCast(*align(1) f32, chan.ptr + @intCast(usize, chan.step) * (start_in_frame + offset)).* += chan_sample;
@@ -254,11 +287,13 @@ fn writeCallback(outstream: *soundio.OutStream, _frame_count_min: c_int, _frame_
 
         // Apply simple clamp limiting
         {
+            const master = self.config.volume.master;
+
             var frame: usize = 0;
             while (frame < frame_count) : (frame += 1) {
                 for (channels) |*chan| {
                     const sample = @ptrCast(*align(1) f32, chan.ptr + @intCast(usize, chan.step) * frame);
-                    sample.* = std.math.clamp(sample.*, -1.0, 1.0);
+                    sample.* = std.math.clamp(master * sample.*, -1.0, 1.0);
                 }
             }
         }
@@ -277,10 +312,12 @@ const SoundEvent = struct {
     in_queue: bool = false,
 
     sound: Sound,
-    left_vol: f32,
-    right_vol: f32,
+    volume: f32,
+    pan: f32,
     start_time: usize,
     count: usize,
+
+    group: AudioGroup,
 };
 
 /// Priority queue for SoundEvent.

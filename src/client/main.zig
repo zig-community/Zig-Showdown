@@ -136,7 +136,7 @@ pub fn main() anyerror!u8 {
     });
     defer window.deinit();
 
-    var renderer = try Renderer.init(global_allocator, window);
+    var renderer = try Renderer.init(global_allocator, window, config.get().graphics);
     defer renderer.deinit();
 
     var resources = try Resources.init(global_allocator, &renderer, audio);

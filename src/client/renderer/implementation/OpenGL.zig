@@ -22,6 +22,10 @@ pub const Model = struct {
     index_buffer: gl.GLuint,
 };
 
+pub const Configuration = struct {
+    multisampling: ?u8 = null,
+};
+
 const UiVertex = extern struct {
     x: i32,
     y: i32,
@@ -89,7 +93,7 @@ transition_slice_tr_to_bl: TransitionShader,
 depth_buffer: gl.GLuint,
 white_texture: gl.GLuint,
 
-pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
+pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
     try gl.load(window.platform, WindowPlatform.getOpenGlProcAddress);
 
     log.info("OpenGL Version:  {}", .{std.mem.span(gl.getString(gl.VERSION))});

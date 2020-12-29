@@ -19,6 +19,10 @@ const Self = @This();
 const Resources = @import("../../Resources.zig");
 const Renderer = @import("../../Renderer.zig");
 
+pub const Configuration = struct {
+    tasks: ?u16 = null,
+};
+
 fn toNativeColor(c: Color) zwl.Pixel {
     return zwl.Pixel{
         .r = c.r,
@@ -35,7 +39,7 @@ pixbuf: ?zwl.PixelBuffer,
 z_buffer: []f32,
 
 /// Initializes a new rendering backend instance for the given window.
-pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
+pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
 
     // this is required to kick-off ZWLs software rendering loop
     const pbuf = try window.mapPixels();

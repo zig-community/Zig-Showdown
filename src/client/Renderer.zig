@@ -24,18 +24,20 @@ pub const Transition = @import("renderer/Transition.zig");
 
 pub const Size = ui.Size;
 
+pub const Configuration = Implementation.Configuration;
+
 allocator: *std.mem.Allocator,
 window: *WindowPlatform.Window,
 implementation: Implementation,
 resources: ?*Resources,
 
 /// Initializes a new rendering backend instance for the given window.
-pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window) !Self {
+pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
     return Self{
         .allocator = allocator,
         .window = window,
         .resources = null,
-        .implementation = try Implementation.init(allocator, window),
+        .implementation = try Implementation.init(allocator, window, configuration),
     };
 }
 

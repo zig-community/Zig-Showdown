@@ -13,6 +13,10 @@ pub const log = std.log.scoped(.vulkan);
 
 const Self = @This();
 
+pub const Configuration = struct {
+    multisampling: ?u8 = null,
+};
+
 const app_info = vk.ApplicationInfo{
     .p_application_name = "SHOWDOWN",
     .application_version = vk.makeVersion(0, 0, 0),
@@ -36,7 +40,7 @@ instance: Instance,
 device: Device,
 surface: vk.SurfaceKHR,
 
-pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
+pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
     log.info("Initializing Vulkan rendering backend", .{});
     // TODO: Don't hardcode this, make it work on other platforms as well
     var libvulkan = std.DynLib.openZ("/usr/lib/libvulkan.so.1") catch |err| {
@@ -68,15 +72,15 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window) !Self {
     };
     errdefer device.deinit();
 
-    log.info("Using device '{}'", .{ device.pdev.name() });
+    log.info("Using device '{}'", .{device.pdev.name()});
 
     const window_dim = window.getSize();
     const qfi = device.uniqueQueueFamilies();
     var swapchain = try Swapchain.init(&instance, &device, allocator, .{
         .surface = surface,
         .vsync = false,
-        .desired_extent = .{.width = window_dim[0], .height = window_dim[1]},
-        .swap_image_usage = .{.color_attachment_bit = true},
+        .desired_extent = .{ .width = window_dim[0], .height = window_dim[1] },
+        .swap_image_usage = .{ .color_attachment_bit = true },
         .queue_family_indices = qfi.asConstSlice(),
     });
     defer swapchain.deinit(&device);

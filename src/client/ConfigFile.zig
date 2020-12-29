@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const Graphics = @import("Renderer.zig").Configuration;
+
 pub const KeyMapping = struct {
     up: []const u32 = &[_]u32{ 17, 103 },
     down: []const u32 = &[_]u32{ 31, 108 },
@@ -42,4 +44,5 @@ pub const Audio = struct {
 keymap: KeyMapping = .{},
 video: Video = .{},
 audio: Audio = .{},
+graphics: Graphics = .{},
 name: []const u8 = "Ziguana",

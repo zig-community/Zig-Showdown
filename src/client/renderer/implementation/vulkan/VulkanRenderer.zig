@@ -24,7 +24,7 @@ pub const log = Context.log;
 const Self = @This();
 
 pub const Configuration = struct {
-    multisampling: ?u8 = null,
+    vsync: bool = false,
 };
 
 const app_info = vk.ApplicationInfo{
@@ -102,7 +102,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
     const qfi = ctx.device.uniqueQueueFamilies();
     var swapchain = try Swapchain.init(&ctx, allocator, .{
         .surface = surface,
-        .vsync = false,
+        .vsync = configuration.vsync,
         .desired_extent = .{ .width = window_dim[0], .height = window_dim[1] },
         .swap_image_usage = .{ .color_attachment_bit = true },
         .queue_family_indices = qfi.asConstSlice(),

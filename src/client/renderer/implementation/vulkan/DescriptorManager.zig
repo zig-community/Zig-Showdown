@@ -1,5 +1,4 @@
 const std = @import("std");
-const zwl = @import("zwl");
 const vk = @import("vulkan");
 const util = @import("util.zig");
 
@@ -41,6 +40,7 @@ const PendingUpdate = struct {
 };
 
 const PendingUpdateQueue = std.ArrayListUnmanaged(PendingUpdate);
+const PendingFreeQueue = std.ArrayListUnmanaged(u32);
 
 pool: vk.DescriptorPool,
 set_layout: vk.DescriptorSetLayout,
@@ -50,6 +50,7 @@ pipeline_layout: vk.PipelineLayout,
 free_textures: std.ArrayListUnmanaged(u32),
 
 pending_updates: [Context.frame_overlap]PendingUpdateQueue,
+pending_frees: PendingFreeQueue,
 
 // These two are stored in the struct so that we don't need to reallocate them every time
 image_infos: std.ArrayListUnmanaged(vk.DescriptorImageInfo),
@@ -61,8 +62,12 @@ pub fn init(ctx: *Context) !Self {
         .set_layout = .null_handle,
         .sets = [_]vk.DescriptorSet{ .null_handle } ** Context.frame_overlap,
         .pipeline_layout = .null_handle,
+
         .free_textures = .{},
+
         .pending_updates = [_]PendingUpdateQueue{.{}} ** Context.frame_overlap,
+        .pending_frees = PendingFreeQueue{},
+
         .image_infos = .{},
         .writes = .{},
     };
@@ -75,12 +80,18 @@ pub fn init(ctx: *Context) !Self {
     try self.free_textures.resize(ctx.allocator, texture_pool_size);
     for (self.free_textures.items) |*x, i| x.* = @intCast(u32, i);
 
+    // Make sure that the pending free array list will have enough space
+    // for all textures to be de-allocated at once.
+    try self.pending_frees.ensureCapacity(ctx.allocator, texture_pool_size);
+
     return self;
 }
 
 pub fn deinit(self: *Self, ctx: *Context) void {
     self.image_infos.deinit(ctx.allocator);
     self.writes.deinit(ctx.allocator);
+
+    self.pending_frees.deinit(ctx.allocator);
 
     for (self.pending_updates) |*puq| {
         puq.deinit(ctx.allocator);
@@ -93,6 +104,14 @@ pub fn deinit(self: *Self, ctx: *Context) void {
     ctx.device.vkd.destroyDescriptorSetLayout(ctx.device.handle, self.set_layout, null);
 }
 
+/// Allocate a texture descriptor for `image_view`. This function also schedules
+/// an internal function which updates the descriptor when `processPendingUpdates`
+/// is queued. Note that this function requires intricate lifetime management of
+/// image_view: When the image view is deleted during a frame, but is also already
+/// queued to be rendered somewhere, its destruction should be defered using
+/// `Context.deferDestruction`. The associated desctriptor can be freed immediately using
+/// `freeTextureDescriptor`, as this function makes sure that frees are only processed
+/// AFTER all updates for the current frame are performed.
 pub fn allocateTextureDescriptor(self: *Self, ctx: *Context, image_view: vk.ImageView) !u32 {
     const index = self.free_textures.popOrNull() orelse return error.OutOfDescriptors;
 
@@ -104,11 +123,21 @@ pub fn allocateTextureDescriptor(self: *Self, ctx: *Context, image_view: vk.Imag
     return index;
 }
 
+/// Schedule texture descriptor index `index` to be freed. The actual processing of this
+/// will only happen AFTER the updates for the current frame are written in
+/// `processPendingUpdates`. Updates for the next few frames are also scratched in that
+/// function.
 pub fn freeTextureDescriptor(self: *Self, ctx: *Context, index: u32) void {
     if (std.builtin.mode == .Debug) {
-        // Make sure that the texture is not already in there
+        // Make sure that the texture is not already freed.
+        // Doing this check now means we both need to check the free textures
+        // list AND the free queue, but it will be easier to track down when the
+        // incorrect texture was freed.
         if (std.mem.indexOfScalar(u32, self.free_textures.items, index) != null) {
-            Context.log.err("Duplicate free of texture index {}", .{ index });
+            Context.log.err("Duplicate free of texture index {} (already freed)", .{ index });
+            return;
+        } else if (std.mem.indexOfScalar(u32, self.pending_frees.items, index) != null) {
+            Context.log.err("Duplicate free of texture index {} (already pending for free", .{ index });
             return;
         } else if (index >= texture_pool_size) {
             Context.log.err("Free of invalid texture index {}", .{ index });
@@ -116,19 +145,9 @@ pub fn freeTextureDescriptor(self: *Self, ctx: *Context, index: u32) void {
         }
     }
 
-    // Remove the index if it is currently scheduled for update.
-    // TODO: Do we need to remove the update for the current frame? We might need to defer
-    // destruction of frame buffers until the end of the frame if the frame buffer is rendered
-    // and then deleted right after.
-    for (self.pending_updates) |*puq| {
-        const i = for (puq.items) |pu, i| {
-                if (pu.index == index) break i;
-            } else continue;
-
-        puq.swapRemove(i);
-    }
-
-    self.free_textures.appendAssumeCapacity(index);
+    // The capacity was ensured in the constructor. That will hold up as long
+    // as no duplicate frees happen.
+    self.pending_frees.appendAssumeCapacity(index);
 }
 
 pub fn bindDescriptorSet(self: *Self, ctx: *Context, cmd_buf: vk.CommandBuffer) void {
@@ -145,6 +164,10 @@ pub fn bindDescriptorSet(self: *Self, ctx: *Context, cmd_buf: vk.CommandBuffer) 
 }
 
 pub fn processPendingUpdates(self: *Self, ctx: *Context) !void {
+    // First, process the pending writes
+    // This may include indexes which are in the pending_frees queue, which is
+    // intended - the image view should always be deleted though the defered
+    // deletion mechanism, and should thus still be valid in this frame.
     const puq = &self.pending_updates[ctx.frameIndex()];
     const set = self.sets[ctx.frameIndex()];
 
@@ -186,6 +209,27 @@ pub fn processPendingUpdates(self: *Self, ctx: *Context) !void {
     );
 
     puq.shrinkRetainingCapacity(0);
+
+    self.processPendingFrees(ctx);
+}
+
+fn processPendingFrees(self: *Self, ctx: *Context) void {
+    // Pending frees and free textures should be disjoint. In debug mode, this is
+    // checked for in `freeTextureDescriptor`, but maybe it should be checked again here?
+    self.free_textures.appendSliceAssumeCapacity(self.pending_frees.items);
+
+    // Cancel any scheduled updates for the next frames
+    for (self.pending_frees.items) |index_to_free| {
+        for (self.pending_updates) |*puq| {
+            const i = for (puq.items) |pu, i| {
+                    if (pu.index == index_to_free) break i;
+                } else continue;
+
+            _ = puq.swapRemove(i);
+        }
+    }
+
+    self.pending_frees.shrinkRetainingCapacity(0);
 }
 
 fn initDescriptorPool(self: *Self, ctx: *Context) !void {

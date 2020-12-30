@@ -6,12 +6,12 @@ var framebuffer: [240][320]u8 = undefined;
 pub fn main() !void {
     const vec3 = zlm.vec3;
 
-    var object = Capsule{
-        .ends = [2]zlm.Vec3{
-            vec3(-3, 1, 10),
-            vec3(3, -1, 10),
+    var object = Triangle{
+        .vertices = [3]zlm.Vec3{
+            vec3(0, 3, 5),
+            vec3(-3, -3, 10),
+            vec3(3, -3, 15),
         },
-        .radius = 5.0,
     };
 
     const aspect = @intToFloat(f32, framebuffer[0].len) / @intToFloat(f32, framebuffer.len);
@@ -59,7 +59,11 @@ pub const Sphere = struct {
     radius: f32,
 };
 
-pub fn intersect(shape_a: anytype, shape_b: anytype) ?f32 {
+pub const Triangle = struct {
+    vertices: [3]zlm.Vec3,
+};
+
+pub inline fn intersect(shape_a: anytype, shape_b: anytype) ?f32 {
     const ShapeA = @TypeOf(shape_a);
     const ShapeB = @TypeOf(shape_b);
 
@@ -67,6 +71,7 @@ pub fn intersect(shape_a: anytype, shape_b: anytype) ?f32 {
         Ray,
         Capsule,
         Sphere,
+        Triangle,
     };
     const ind_a = inline for (type_order) |T, i| {
         if (T == ShapeA)
@@ -87,11 +92,29 @@ pub fn intersect(shape_a: anytype, shape_b: anytype) ?f32 {
 
     return switch (ShapeLeft) {
         Ray => switch (ShapeRight) {
+            Ray => unreachable,
             Sphere => intersectRaySphere(shape_l, shape_r),
             Capsule => intersectRayCapsule(shape_l, shape_r),
-            else => @compileError(error_missing_collision),
+            Triangle => intersectRayTriangle(shape_l, shape_r),
         },
-        else => @compileError(error_missing_collision),
+        Sphere => switch (ShapeRight) {
+            Ray => unreachable,
+            Sphere => @compileError(error_missing_collision),
+            Capsule => @compileError(error_missing_collision),
+            Triangle => @compileError(error_missing_collision),
+        },
+        Capsule => switch (ShapeRight) {
+            Ray => unreachable,
+            Sphere => unreachable,
+            Capsule => @compileError(error_missing_collision),
+            Triangle => @compileError(error_missing_collision),
+        },
+        Triangle => switch (ShapeRight) {
+            Ray => unreachable,
+            Sphere => unreachable,
+            Capsule => unreachable,
+            Triangle => @compileError(error_missing_collision),
+        },
     };
 }
 
@@ -150,4 +173,19 @@ pub fn intersectRayCapsule(ray: Ray, capsule: Capsule) ?f32 {
             return (-b2 - std.math.sqrt(h2));
     }
     return null;
+}
+
+pub fn intersectRayTriangle(ray: Ray, tris: Triangle) ?f32 {
+    const v1v0 = tris.vertices[1].sub(tris.vertices[0]);
+    const v2v0 = tris.vertices[2].sub(tris.vertices[0]);
+    const rov0 = ray.origin.sub(tris.vertices[0]);
+    const n = zlm.Vec3.cross(v1v0, v2v0);
+    const q = zlm.Vec3.cross(rov0, ray.direction);
+    const d = 1.0 / zlm.Vec3.dot(ray.direction, n);
+    const u = -d * zlm.Vec3.dot(q, v2v0);
+    const v = d * zlm.Vec3.dot(q, v1v0);
+    const t = -d * zlm.Vec3.dot(n, rov0);
+    if (u < 0.0 or u > 1.0 or v < 0.0 or (u + v) > 1.0)
+        return null;
+    return t;
 }

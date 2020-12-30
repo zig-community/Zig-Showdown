@@ -12,6 +12,7 @@ const Context = @import("Context.zig");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
 const Swapchain = @import("Swapchain.zig");
+const DescriptorManager = @import("DescriptorManager.zig");
 
 const PostProcessPipeline = @import("PostProcessPipeline.zig");
 
@@ -46,6 +47,7 @@ const device_extensions = [_][*:0]const u8{
 
 const required_descriptor_indexing_features = util.initFeatures(vk.PhysicalDeviceDescriptorIndexingFeatures, .{
         .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
+        .descriptor_binding_sampled_image_update_after_bind = vk.TRUE,
         .descriptor_binding_partially_bound = vk.TRUE,
         .descriptor_binding_variable_descriptor_count = vk.TRUE,
         .runtime_descriptor_array = vk.TRUE,
@@ -56,6 +58,7 @@ ctx: Context,
 surface: vk.SurfaceKHR,
 swapchain: Swapchain,
 frames: [Context.frame_overlap]Frame,
+descriptor_manager: DescriptorManager,
 post_process_pipeline: PostProcessPipeline,
 
 pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
@@ -91,7 +94,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
     };
     errdefer device.deinit();
 
-    var ctx = Context.init(allocator, instance, device);
+    var ctx = try Context.init(allocator, instance, device);
 
     log.info("Using device '{}'", .{ ctx.device.pdev.name() });
 
@@ -116,8 +119,11 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
         n_successfully_created = i;
     }
 
+    var dm = try DescriptorManager.init(&ctx);
+    errdefer dm.deinit(&ctx);
+
     var ppp = try PostProcessPipeline.init(&ctx, &swapchain);
-    errdefer self.ppp.deinit(&self);
+    errdefer ppp.deinit(&ctx);
 
     var self = Self{
         .libvulkan = libvulkan,
@@ -125,6 +131,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
         .surface = surface,
         .swapchain = swapchain,
         .frames = frames,
+        .descriptor_manager = dm,
         .post_process_pipeline = ppp,
     };
 
@@ -145,6 +152,7 @@ pub fn deinit(self: *Self) void {
     };
 
     self.post_process_pipeline.deinit(&self.ctx);
+    self.descriptor_manager.deinit(&self.ctx);
 
     for (self.frames) |*frame| frame.deinit(&self.ctx.device);
     self.swapchain.deinit(&self.ctx.device);
@@ -177,6 +185,8 @@ pub fn beginFrame(self: *Self) !void {
         .flags = .{.one_time_submit_bit = true},
         .p_inheritance_info = null,
     });
+
+    self.descriptor_manager.bindDescriptorSet(&self.ctx, frame.cmd_buf);
 }
 
 pub fn endFrame(self: *Self) !void {
@@ -185,9 +195,10 @@ pub fn endFrame(self: *Self) !void {
     // doesn't make VulkanRenderer hang during deinitialization.
 
     try self.post_process_pipeline.draw(&self.ctx, &self.swapchain, frame.cmd_buf);
-
     try self.ctx.device.vkd.endCommandBuffer(frame.cmd_buf);
+    try self.descriptor_manager.processPendingUpdates(&self.ctx);
 
+    // TODO: Synchronization between this frame and the next?
     const submit_info = vk.SubmitInfo{
         .wait_semaphore_count = 1,
         .p_wait_semaphores = asManyPtr(&frame.image_acquired),
@@ -284,7 +295,7 @@ const Frame = struct {
     }
 
     fn deinit(self: *Frame, device: *const Device) void {
-        // Destroyign a command pool will also free its associated command buffers.
+        // Destroying a command pool will also free its associated command buffers.
         device.vkd.destroyCommandPool(device.handle, self.cmd_pool, null);
         device.vkd.destroyFence(device.handle, self.frame_fence, null);
         device.vkd.destroySemaphore(device.handle, self.render_finished, null);

@@ -299,6 +299,14 @@ const DeviceDispatch = struct {
     vkDestroyShaderModule: vk.PfnDestroyShaderModule,
     vkCreateGraphicsPipelines: vk.PfnCreateGraphicsPipelines,
     vkDestroyPipeline: vk.PfnDestroyPipeline,
+    vkCreateDescriptorSetLayout: vk.PfnCreateDescriptorSetLayout,
+    vkDestroyDescriptorSetLayout: vk.PfnDestroyDescriptorSetLayout,
+    vkCreateDescriptorPool: vk.PfnCreateDescriptorPool,
+    vkDestroyDescriptorPool: vk.PfnDestroyDescriptorPool,
+    vkAllocateDescriptorSets: vk.PfnAllocateDescriptorSets,
+    vkUpdateDescriptorSets: vk.PfnUpdateDescriptorSets,
+    vkCreateSampler: vk.PfnCreateSampler,
+    vkDestroySampler: vk.PfnDestroySampler,
     vkCreateCommandPool: vk.PfnCreateCommandPool,
     vkDestroyCommandPool: vk.PfnDestroyCommandPool,
     vkResetCommandPool: vk.PfnResetCommandPool,
@@ -308,6 +316,7 @@ const DeviceDispatch = struct {
     vkCmdBeginRenderPass: vk.PfnCmdBeginRenderPass,
     vkCmdEndRenderPass: vk.PfnCmdEndRenderPass,
     vkCmdBindPipeline: vk.PfnCmdBindPipeline,
+    vkCmdBindDescriptorSets: vk.PfnCmdBindDescriptorSets,
     vkCmdDraw: vk.PfnCmdDraw,
 
     // VK_KHR_swapchain

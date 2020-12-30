@@ -6,23 +6,28 @@ var framebuffer: [240][320]u8 = undefined;
 pub fn main() !void {
     const vec3 = zlm.vec3;
 
-    var sphere = Sphere{
-        .center = vec3(0, 0, 10),
-        .radius = 1.0,
+    var object = Capsule{
+        .ends = [2]zlm.Vec3{
+            vec3(-3, 1, 10),
+            vec3(3, -1, 10),
+        },
+        .radius = 5.0,
     };
+
+    const aspect = @intToFloat(f32, framebuffer[0].len) / @intToFloat(f32, framebuffer.len);
 
     for (framebuffer) |*row, y| {
         for (row) |*pixel, x| {
-            const fx = 2.0 * @intToFloat(f32, x) / @intToFloat(f32, framebuffer.len - 1) - 1.0;
-            const fy = 2.0 * @intToFloat(f32, y) / @intToFloat(f32, row.len - 1) - 1.0;
+            const fx = aspect * (2.0 * @intToFloat(f32, x) / @intToFloat(f32, row.len - 1) - 1.0);
+            const fy = 2.0 * @intToFloat(f32, y) / @intToFloat(f32, framebuffer.len - 1) - 1.0;
 
             var ray = Ray{
                 .origin = vec3(0, 0, 0),
                 .direction = vec3(fx, fy, 1.0).normalize(),
             };
 
-            pixel.* = if (intersect(ray, sphere) != null)
-                0xFF
+            pixel.* = if (intersect(ray, object)) |dist|
+                @floatToInt(u8, 255.0 * std.math.clamp(dist - 5.0, 0.0, 10.0) / 10.0)
             else
                 0x00;
         }
@@ -83,6 +88,7 @@ pub fn intersect(shape_a: anytype, shape_b: anytype) ?f32 {
     return switch (ShapeLeft) {
         Ray => switch (ShapeRight) {
             Sphere => intersectRaySphere(shape_l, shape_r),
+            Capsule => intersectRayCapsule(shape_l, shape_r),
             else => @compileError(error_missing_collision),
         },
         else => @compileError(error_missing_collision),
@@ -115,4 +121,33 @@ pub fn intersectRaySphere(ray: Ray, sphere: Sphere) ?f32 {
     }
 
     return t0;
+}
+
+pub fn intersectRayCapsule(ray: Ray, capsule: Capsule) ?f32 {
+    const ba = capsule.ends[1].sub(capsule.ends[0]);
+    const oa = ray.origin.sub(capsule.ends[0]);
+    const baba = zlm.Vec3.dot(ba, ba);
+    const bard = zlm.Vec3.dot(ba, ray.direction);
+    const baoa = zlm.Vec3.dot(ba, oa);
+    const rdoa = zlm.Vec3.dot(ray.direction, oa);
+    const oaoa = zlm.Vec3.dot(oa, oa);
+    const a = baba - bard * bard;
+    const b = baba * rdoa - baoa * bard;
+    const c = baba * oaoa - baoa * baoa - capsule.radius * capsule.radius * baba;
+    const h = b * b - a * c;
+    if (h >= 0.0) {
+        const t = (-b - std.math.sqrt(h)) / a;
+        const y = baoa + t * bard;
+        // body
+        if (y > 0.0 and y < baba)
+            return t;
+        // caps
+        const oc = if (y <= 0.0) oa else ray.origin.sub(capsule.ends[1]);
+        const b2 = zlm.Vec3.dot(ray.direction, oc);
+        const c2 = zlm.Vec3.dot(oc, oc) - capsule.radius * capsule.radius;
+        const h2 = b2 * b2 - c2;
+        if (h2 > 0.0)
+            return (-b2 - std.math.sqrt(h2));
+    }
+    return null;
 }

@@ -2,3 +2,4 @@ zig-cache/
 showdown.conf
 *.blend*
 assets
+collision-debug.pgm

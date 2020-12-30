@@ -212,6 +212,8 @@ pub fn build(b: *std.build.Builder) !void {
         @panic("OpenGL, Vulkan and OpenGL ES require linking against glibc, musl is not supported!");
     }
 
+    const test_step = b.step("test", "Runs the test suite for all source filess");
+
     const gen_vk = vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig");
 
     const asset_gen_step = blk: {
@@ -411,8 +413,28 @@ pub fn build(b: *std.build.Builder) !void {
         test_server.setTarget(target);
         test_server.setBuildMode(mode);
 
-        const test_step = b.step("test", "Runs the test suite for both client and server implementation");
         test_step.dependOn(&test_client.step);
         test_step.dependOn(&test_server.step);
+    }
+
+    // collision development stuff
+    {
+        const exe = b.addExecutable("collision", "src/development/collision.zig");
+        exe.setTarget(target);
+        exe.setBuildMode(mode);
+        exe.addPackage(pkgs.zlm);
+
+        const exe_step = b.step("collision", "Compiles the collider dev environment.");
+        exe_step.dependOn(&exe.step);
+
+        const run = exe.run();
+
+        const run_step = b.step("run-collision", "Runs the collider dev environment.");
+        run_step.dependOn(&run.step);
+
+        const tst = b.addTest("src/development/collision.zig");
+        tst.addPackage(pkgs.zlm);
+
+        test_step.dependOn(&tst.step);
     }
 }

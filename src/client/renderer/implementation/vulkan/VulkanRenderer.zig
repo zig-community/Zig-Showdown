@@ -6,13 +6,14 @@ const util = @import("util.zig");
 const WindowPlatform = @import("../../../main.zig").WindowPlatform;
 const Renderer = @import("../../../Renderer.zig");
 const Color = @import("../../Color.zig");
-const Resources = @import("Resources.zig");
+const Resources = @import("../../../Resources.zig");
 
 const Context = @import("Context.zig");
 const Instance = @import("Instance.zig");
 const Device = @import("Device.zig");
 const Swapchain = @import("Swapchain.zig");
 const DescriptorManager = @import("DescriptorManager.zig");
+pub const Texture = @import("Texture.zig");
 
 const PostProcessPipeline = @import("PostProcessPipeline.zig");
 
@@ -122,7 +123,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
     var dm = try DescriptorManager.init(&ctx);
     errdefer dm.deinit(&ctx);
 
-    var ppp = try PostProcessPipeline.init(&ctx, &swapchain);
+    var ppp = try PostProcessPipeline.init(&ctx, dm.pipeline_layout, &swapchain);
     errdefer ppp.deinit(&ctx);
 
     var self = Self{
@@ -235,13 +236,13 @@ pub fn submitTransition(self: *Self, render_target: Renderer.RenderTarget, trans
     log.debug("transition pass", .{});
 }
 
-pub const Texture = void;
-
-pub fn createTexture(self: *Self, texture: *Resources.Texture) !Texture {
-    return {};
+pub fn createTexture(self: *Self, backing: *Resources.Texture) !Texture {
+    return Texture.init(&self.ctx, &self.descriptor_manager, backing);
 }
 
-pub fn destroyTexture(self: *Self, texture: *Texture) void {}
+pub fn destroyTexture(self: *Self, texture: *Texture) void {
+    return texture.deinit(&self.ctx, &self.descriptor_manager);
+}
 
 pub const Model = void;
 

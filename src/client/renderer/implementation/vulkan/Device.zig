@@ -1,5 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
+
 const Instance = @import("Instance.zig");
 const Allocator = std.mem.Allocator;
 const SmallBuf = @import("util.zig").SmallBuf;
@@ -275,12 +276,24 @@ pub const PhysicalDevice = struct {
             .present_family = present_family,
         };
     }
+
+    pub fn findMemoryTypeIndex(self: PhysicalDevice, memory_type_bits: u32, flags: vk.MemoryPropertyFlags) !u32 {
+        for (self.mem_props.memory_types[0 .. self.mem_props.memory_type_count]) |mem_type, i| {
+            if (memory_type_bits & (@as(u32, 1) << @truncate(u5, i)) != 0 and mem_type.property_flags.contains(flags)) {
+                return @truncate(u32, i);
+            }
+        }
+
+        return error.NoSuitableMemoryType;
+    }
 };
 
 const DeviceDispatch = struct {
     vkDestroyDevice: vk.PfnDestroyDevice,
     vkGetDeviceQueue: vk.PfnGetDeviceQueue,
     vkQueueSubmit: vk.PfnQueueSubmit,
+    vkCreateImage: vk.PfnCreateImage,
+    vkDestroyImage: vk.PfnDestroyImage,
     vkCreateImageView: vk.PfnCreateImageView,
     vkDestroyImageView: vk.PfnDestroyImageView,
     vkCreateSemaphore: vk.PfnCreateSemaphore,
@@ -304,6 +317,10 @@ const DeviceDispatch = struct {
     vkCreateDescriptorPool: vk.PfnCreateDescriptorPool,
     vkDestroyDescriptorPool: vk.PfnDestroyDescriptorPool,
     vkAllocateDescriptorSets: vk.PfnAllocateDescriptorSets,
+    vkAllocateMemory: vk.PfnAllocateMemory,
+    vkFreeMemory: vk.PfnFreeMemory,
+    vkGetImageMemoryRequirements: vk.PfnGetImageMemoryRequirements,
+    vkBindImageMemory: vk.PfnBindImageMemory,
     vkUpdateDescriptorSets: vk.PfnUpdateDescriptorSets,
     vkCreateSampler: vk.PfnCreateSampler,
     vkDestroySampler: vk.PfnDestroySampler,

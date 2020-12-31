@@ -10,29 +10,9 @@ const Self = @This();
 
 //! TODO: Document this file better
 
-// Maximum of 1024 texture descriptors.
+// Maximum number of texture descriptors.
 // This needs to be kept in sync with all Vulkan shaders!
 const texture_pool_size = 1024;
-
-/// The bindings used by the entire renderer.
-/// These bindings must be kept in sync with all Vulkan shaders!
-// TODO: Make the texture pool size dynamic and update it through a specialization constant?
-const bindings = [_]vk.DescriptorSetLayoutBinding{
-    .{ // layout(binding = 0) uniform sampler texture_sampler;
-        .binding = 0,
-        .descriptor_type = .sampler,
-        .descriptor_count = 1,
-        .stage_flags = .{.vertex_bit = true, .fragment_bit = true, .compute_bit = true},
-        .p_immutable_samplers = null,
-    },
-    .{ // layout(binding = 1) uniform texture2D textures[texture_pool_size];
-        .binding = 1,
-        .descriptor_type = .sampled_image,
-        .descriptor_count = texture_pool_size,
-        .stage_flags = .{.vertex_bit = true, .fragment_bit = true, .compute_bit = true},
-        .p_immutable_samplers = null,
-    },
-};
 
 const PendingUpdate = struct {
     index: u32,
@@ -57,6 +37,26 @@ image_infos: std.ArrayListUnmanaged(vk.DescriptorImageInfo),
 writes: std.ArrayListUnmanaged(vk.WriteDescriptorSet),
 
 pub fn init(ctx: *Context) !Self {
+    // The bindings used by the entire renderer.
+    // These bindings must be kept in sync with all Vulkan shaders!
+    // TODO: Think of better way to encode this struct
+    const bindings = [_]vk.DescriptorSetLayoutBinding{
+        .{ // layout(set = 0, binding = 0) uniform sampler texture_sampler;
+            .binding = 0,
+            .descriptor_type = .sampler,
+            .descriptor_count = 1,
+            .stage_flags = .{.vertex_bit = true, .fragment_bit = true, .compute_bit = true},
+            .p_immutable_samplers = asManyPtr(&ctx.texture_sampler),
+        },
+        .{ // layout(set = 0, binding = 1) uniform texture2D textures[texture_pool_size];
+            .binding = 1,
+            .descriptor_type = .sampled_image,
+            .descriptor_count = texture_pool_size,
+            .stage_flags = .{.vertex_bit = true, .fragment_bit = true, .compute_bit = true},
+            .p_immutable_samplers = null,
+        },
+    };
+
     var self = Self{
         .pool = .null_handle,
         .set_layout = .null_handle,
@@ -73,8 +73,8 @@ pub fn init(ctx: *Context) !Self {
     };
     errdefer self.deinit(ctx);
 
-    try self.initDescriptorPool(ctx);
-    try self.initDescriptorSets(ctx);
+    try self.initDescriptorPool(ctx, &bindings);
+    try self.initDescriptorSets(ctx, &bindings);
     try self.initPipelineLayout(ctx);
 
     try self.free_textures.resize(ctx.allocator, texture_pool_size);
@@ -118,7 +118,7 @@ pub fn allocateTextureDescriptor(self: *Self, ctx: *Context, image_view: vk.Imag
     // Schedule the write for future frames
     // If the image view is destroyed in the mean time, it needs to be removed from here!
     for (self.pending_updates) |*puq| {
-        try puq.append(.{.index = index, .image_view = image_view});
+        try puq.append(ctx.allocator, .{.index = index, .image_view = image_view});
     }
     return index;
 }
@@ -177,9 +177,6 @@ pub fn processPendingUpdates(self: *Self, ctx: *Context) !void {
     const image_infos = self.image_infos.items;
     const writes = self.writes.items;
 
-    // TODO: Don't hardcode this
-    const texture_binding = bindings[1];
-
     for (puq.items) |pu, i| {
         image_infos[i] = .{
             .sampler = .null_handle,
@@ -190,10 +187,10 @@ pub fn processPendingUpdates(self: *Self, ctx: *Context) !void {
 
         writes[i] = .{
             .dst_set = set,
-            .dst_binding = texture_binding.binding,
+            .dst_binding = 1, // TODO: Don't hardcode this.
             .dst_array_element = pu.index,
             .descriptor_count = 1,
-            .descriptor_type = texture_binding.descriptor_type,
+            .descriptor_type = .sampled_image, // TODO: Don't hardcode this.
             .p_image_info = asManyPtr(&image_infos[i]),
             .p_buffer_info = undefined,
             .p_texel_buffer_view = undefined,
@@ -232,7 +229,7 @@ fn processPendingFrees(self: *Self, ctx: *Context) void {
     self.pending_frees.shrinkRetainingCapacity(0);
 }
 
-fn initDescriptorPool(self: *Self, ctx: *Context) !void {
+fn initDescriptorPool(self: *Self, ctx: *Context, bindings: *const [2]vk.DescriptorSetLayoutBinding) !void {
     var pool_sizes = SmallBuf(bindings.len, vk.DescriptorPoolSize){};
     for (bindings) |binding| {
         for (pool_sizes.asSlice()) |*pool_size| {
@@ -256,11 +253,22 @@ fn initDescriptorPool(self: *Self, ctx: *Context) !void {
     }, null);
 }
 
-fn initDescriptorSets(self: *Self, ctx: *Context) !void {
+fn initDescriptorSets(self: *Self, ctx: *Context, bindings: *const [2]vk.DescriptorSetLayoutBinding) !void {
+    const flags = [_]vk.DescriptorBindingFlags{
+        .{},
+        .{.partially_bound_bit = true},
+    };
+
+    const dslbfci = vk.DescriptorSetLayoutBindingFlagsCreateInfo{
+        .binding_count = flags.len,
+        .p_binding_flags = &flags,
+    };
+
     self.set_layout = try ctx.device.vkd.createDescriptorSetLayout(ctx.device.handle, .{
+        .p_next = @ptrCast(*const c_void, &dslbfci),
         .flags = .{},
         .binding_count = bindings.len,
-        .p_bindings = &bindings,
+        .p_bindings = bindings,
     }, null);
 
     var layouts: [Context.frame_overlap]vk.DescriptorSetLayout = undefined;

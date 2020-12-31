@@ -24,29 +24,25 @@ render_pass: vk.RenderPass,
 /// Swapchain framebuffers
 framebuffers: []vk.Framebuffer,
 
-pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 
-pub fn init(ctx: *Context, swapchain: *Swapchain) !Self {
+pub fn init(ctx: *Context, pipeline_layout: vk.PipelineLayout, swapchain: *Swapchain) !Self {
     var self = Self{
         .render_pass = .null_handle,
         .framebuffers = try ctx.allocator.alloc(vk.Framebuffer, 0),
-        .pipeline_layout = .null_handle,
         .pipeline = .null_handle,
     };
     errdefer self.deinit(ctx);
 
     try self.initRenderPass(ctx, swapchain);
     try self.initFramebuffers(ctx, swapchain);
-    try self.initPipelineLayout(ctx);
-    try self.initPipeline(ctx, swapchain);
+    try self.initPipeline(ctx, pipeline_layout, swapchain);
 
     return self;
 }
 
 pub fn deinit(self: Self, ctx: *Context) void {
     ctx.device.vkd.destroyPipeline(ctx.device.handle, self.pipeline, null);
-    ctx.device.vkd.destroyPipelineLayout(ctx.device.handle, self.pipeline_layout, null);
 
     for (self.framebuffers) |fb| {
         ctx.device.vkd.destroyFramebuffer(ctx.device.handle, fb, null);
@@ -135,17 +131,7 @@ fn initFramebuffers(self: *Self, ctx: *Context, swapchain: *Swapchain) !void {
     }
 }
 
-fn initPipelineLayout(self: *Self, ctx: *Context) !void {
-    self.pipeline_layout = try ctx.device.vkd.createPipelineLayout(ctx.device.handle, .{
-        .flags = .{},
-        .set_layout_count = 0,
-        .p_set_layouts = undefined,
-        .push_constant_range_count = 0,
-        .p_push_constant_ranges = undefined,
-    }, null);
-}
-
-fn initPipeline(self: *Self, ctx: *Context, swapchain: *Swapchain) !void {
+fn initPipeline(self: *Self, ctx: *Context, pipeline_layout: vk.PipelineLayout, swapchain: *Swapchain) !void {
     const vert = try ctx.device.vkd.createShaderModule(ctx.device.handle, .{
         .flags = .{},
         .code_size = shaders.post_process_vert.len,
@@ -275,7 +261,7 @@ fn initPipeline(self: *Self, ctx: *Context, swapchain: *Swapchain) !void {
         .p_depth_stencil_state = null,
         .p_color_blend_state = &pcbsci,
         .p_dynamic_state = null,
-        .layout = self.pipeline_layout,
+        .layout = pipeline_layout,
         .render_pass = self.render_pass,
         .subpass = 0,
         .base_pipeline_handle = .null_handle,

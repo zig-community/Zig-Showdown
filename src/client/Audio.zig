@@ -25,7 +25,7 @@ fn trySound(err: c_int) !void {
     if (err == 0)
         return;
 
-    log.err("{}", .{std.mem.span(soundio.soundio_strerror(err))});
+    log.err("{s}", .{std.mem.span(soundio.soundio_strerror(err))});
 
     return switch (@intToEnum(soundio.Error, err)) {
         .None => unreachable,
@@ -70,7 +70,7 @@ pub fn init(allocator: *std.mem.Allocator, config: Config) !*Self {
     const device = interface.getOutputDevice(output_device_index) orelse return error.OutOfMemory;
     errdefer device.unref();
 
-    log.info("Output device: {}", .{std.mem.span(device.*.name)});
+    log.info("Output device: {s}", .{std.mem.span(device.*.name)});
 
     const outstream = soundio.OutStream.create(device) orelse return error.OutOfMemory;
     errdefer outstream.destroy();

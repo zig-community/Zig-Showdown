@@ -119,17 +119,17 @@ pub fn main() !u8 {
         };
 
         const mtl = materials.materials.get(mtl_name) orelse {
-            std.log.err("material '{}' not found!", .{mtl_name});
+            std.log.err("material '{s}' not found!", .{mtl_name});
             return 1;
         };
 
         const texture_file = mtl.diffuse_texture orelse {
-            std.log.err("material '{}' has no diffuse texture!", .{mtl_name});
+            std.log.err("material '{s}' has no diffuse texture!", .{mtl_name});
             return 1;
         };
 
         if (texture_file.len < 4) {
-            std.log.err("'{}' is too short for a valid file name!", .{texture_file});
+            std.log.err("'{s}' is too short for a valid file name!", .{texture_file});
         }
     }
 
@@ -198,7 +198,7 @@ pub fn main() !u8 {
 
         var buffer = [1]u8{0} ** 120;
 
-        _ = try std.fmt.bufPrint(&buffer, "{}/{}.tex", .{
+        _ = try std.fmt.bufPrint(&buffer, "{s}/{s}.tex", .{
             std.fs.path.dirname(cli.positionals[2]), // use the asset relative path
             texture[0 .. texture.len - 4],
         });

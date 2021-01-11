@@ -96,9 +96,9 @@ white_texture: gl.GLuint,
 pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window, configuration: Configuration) !Self {
     try gl.load(window.platform, WindowPlatform.getOpenGlProcAddress);
 
-    log.info("OpenGL Version:  {}", .{std.mem.span(gl.getString(gl.VERSION))});
-    log.info("OpenGL Vendor:   {}", .{std.mem.span(gl.getString(gl.VENDOR))});
-    log.info("OpenGL Renderer: {}", .{std.mem.span(gl.getString(gl.RENDERER))});
+    log.info("OpenGL Version:  {s}", .{std.mem.span(gl.getString(gl.VERSION))});
+    log.info("OpenGL Vendor:   {s}", .{std.mem.span(gl.getString(gl.VENDOR))});
+    log.info("OpenGL Renderer: {s}", .{std.mem.span(gl.getString(gl.RENDERER))});
 
     const required_extensions = [_][]const u8{
         "GL_ARB_direct_state_access",
@@ -126,7 +126,7 @@ pub fn init(allocator: *std.mem.Allocator, window: *WindowPlatform.Window, confi
     for (required_extensions) |ext, i| {
         if (available_extensions[i] == false) {
             all_available = false;
-            log.emerg("missing OpenGL extension: {}", .{ext});
+            log.emerg("missing OpenGL extension: {s}", .{ext});
         }
     }
     if (!all_available)
@@ -411,7 +411,7 @@ fn bindRenderTarget(self: *Self, render_target: Renderer.RenderTarget) void {
                 gl.FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS => "incomplete layer targets",
                 else => "unknown",
             };
-            log.emerg("Incomplete framebuffer: {}\n", .{msg});
+            log.emerg("Incomplete framebuffer: {s}\n", .{msg});
         }
         gl.bindFramebuffer(gl.FRAMEBUFFER, self.frame_buffer);
     } else {
@@ -918,11 +918,11 @@ pub fn destroyModel(self: *Self, model: *Model) void {
 }
 
 fn debugCallback(source: gl.GLenum, msg_type: gl.GLenum, id: gl.GLuint, severity: gl.GLenum, length: gl.GLsizei, opt_message: ?[*:0]const u8, userParam: ?*c_void) callconv(.C) void {
-    // std.debug.print("{} {} {} {} {} {*} {}:\n", .{
+    // std.debug.print("{s} {s} {s} {s} {s} {*} {s}:\n", .{
     //     source, msg_type, id, severity, length, message, userParam,
     // });
     if (opt_message) |message| {
-        const msg = "{}";
+        const msg = "{s}";
         const args = .{
             message[0..@intCast(usize, length)],
         };
@@ -996,7 +996,7 @@ fn compileShader(allocator: *std.mem.Allocator, comptime Shader: type, vertex_so
 
         gl.getProgramInfoLog(shader.program, @intCast(c_int, info_log.len), null, info_log.ptr);
 
-        log.info("failed to compile shader:\n{}", .{info_log});
+        log.info("failed to compile shader:\n{s}", .{info_log});
 
         return error.InvalidShader;
     }
@@ -1059,7 +1059,7 @@ fn compilerShaderPart(allocator: *std.mem.Allocator, shader_type: gl.GLenum, sou
 
         gl.getShaderInfoLog(shader, @intCast(c_int, info_log.len), null, info_log.ptr);
 
-        log.info("failed to compile shader:\n{}", .{info_log});
+        log.info("failed to compile shader:\n{s}", .{info_log});
 
         return error.InvalidShader;
     }

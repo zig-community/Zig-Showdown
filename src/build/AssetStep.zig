@@ -44,7 +44,7 @@ pub fn create(builder: *Builder, embed: bool, converters: Converters) !*Self {
     try self.resources_file_contents.writer().print(
         \\// This is auto-generated code
         \\
-        \\pub const embedded = {};
+        \\pub const embedded = {s};
         \\
         \\pub const files = .{{
         \\
@@ -125,13 +125,13 @@ pub fn addResources(self: *Self, root: []const u8) !void {
         if (self.embed) {
             const pr = PathRenderer{.path = output};
             try writer.print(
-                \\    .@"{}" = @alignCast(64, @embedFile("{}")),
+                \\    .@"{s}" = @alignCast(64, @embedFile("{}")),
                 \\
                 , .{ name, pr }
             );
         } else {
             try writer.print(
-                \\    .@"{}" = {{}},
+                \\    .@"{s}" = {{}},
                 \\
                 , .{ name }
             );

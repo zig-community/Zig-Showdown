@@ -176,7 +176,7 @@ pub fn ResourcePool(
             while (i < len) {
                 if (items[i].value.usage == 0) {
                     // delete all unused resources
-                    var old_entry = self.resources.remove(items[i].key) orelse unreachable;
+                    var old_entry = self.resources.swapRemove(items[i].key) orelse unreachable;
                     freeFn(self.context, self.allocator, &old_entry.value.resource);
                     old_entry.value.file_mapping.deinit();
                     len -= 1; // swapRemove keeps the next item at `i`, but reduces length
@@ -203,7 +203,7 @@ pub fn ResourcePool(
         pub fn get(self: *Self, name: ResourceName, usage: Mask) !T {
             const gopr = try self.resources.getOrPut(self.allocator, name);
             if (!gopr.found_existing) {
-                errdefer _ = self.resources.remove(name);
+                errdefer _ = self.resources.swapRemove(name);
 
                 var iter = self.resource_names.iterator();
                 const file_name = while (iter.next()) |kv| {
@@ -213,7 +213,7 @@ pub fn ResourcePool(
 
                 var file_map = MappingOfFile.init(self.allocator, self.root_directory, file_name) catch |err| switch (err) {
                     error.FileNotFound => {
-                        log.emerg("Could not find resource file '{}'", .{file_name});
+                        log.emerg("Could not find resource file '{s}'", .{file_name});
                         return error.FileNotFound;
                     },
                     else => |e| return e,

@@ -86,7 +86,7 @@ pub fn main() !u8 {
                     return error.InvalidFormat;
                 maybe_pcm_data = buffer;
             } else {
-                std.log.warn("unknown WAVE chunk: '{}'", .{sig});
+                std.log.warn("unknown WAVE chunk: '{s}'", .{sig});
             }
         }
     }

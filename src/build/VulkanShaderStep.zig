@@ -43,7 +43,7 @@ pub fn addShader(self: *Self, name: []const u8, source: []const u8) !void {
     var writer = self.shaders.writer();
     const pr = PathRenderer{.path = shader_out_path};
     try writer.print(
-        \\pub const {} = @alignCast(64, @embedFile("{}"));
+        \\pub const {s} = @alignCast(64, @embedFile("{}"));
         \\
         , .{ name, pr }
     );

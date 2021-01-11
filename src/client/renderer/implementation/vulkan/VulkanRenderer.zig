@@ -97,7 +97,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
 
     var ctx = try Context.init(allocator, instance, device);
 
-    log.info("Using device '{}'", .{ ctx.device.pdev.name() });
+    log.info("Using device '{s}'", .{ ctx.device.pdev.name() });
 
     const window_dim = window.getSize();
     const qfi = ctx.device.uniqueQueueFamilies();
@@ -110,7 +110,7 @@ pub fn init(allocator: *Allocator, window: *WindowPlatform.Window, configuration
     });
     errdefer swapchain.deinit(&ctx.device);
 
-    log.info("Created swapchain with surface format {}", .{ @tagName(swapchain.surface_format.format) });
+    log.info("Created swapchain with surface format {s}", .{ @tagName(swapchain.surface_format.format) });
 
     var frames: [Context.frame_overlap]Frame = undefined;
     var n_successfully_created: usize = 0;

@@ -134,7 +134,7 @@ pub fn findAndCreateDevice(
     defer allocator.free(tmp_exts);
 
     for (pdevs) |pdev| {
-        const msg_base_fmt = "Cannot use device '{}': ";
+        const msg_base_fmt = "Cannot use device '{s}': ";
         const msg_base_args = .{ pdev.name() };
 
         // First, check whether the device supports the surface at all.
@@ -153,7 +153,7 @@ pub fn findAndCreateDevice(
         if (missing_extensions.len > 0) {
             log.info(msg_base_fmt ++ "{} required extension(s) not supported", msg_base_args ++ .{ missing_extensions.len });
             for (missing_extensions) |ext_z| {
-                log.info("Required extension '{}' not supported", .{ std.mem.spanZ(ext_z) });
+                log.info("Required extension '{s}' not supported", .{ std.mem.spanZ(ext_z) });
             }
             continue;
         }
@@ -167,7 +167,7 @@ pub fn findAndCreateDevice(
                 else => |narrow| return narrow,
             };
 
-            log.info(msg_base_fmt ++ "{}", msg_base_args ++ .{ message });
+            log.info(msg_base_fmt ++ "{s}", msg_base_args ++ .{ message });
             continue;
         };
         defer queues.deinit(allocator);
